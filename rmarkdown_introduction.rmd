@@ -1,0 +1,195 @@
+---
+title: "Rmarkdown Introduction"
+author: "梁家安、簡于閔"
+date: "Nov 7, 2016"
+output:
+  html_document:
+    toc: true
+    toc_depth: 1
+    toc_float: true
+---
+
+
+
+
+<br/>
+<br/>
+
+----------------------------------------------------------------------------------------------
+
+### *好處*：
++    1. 可以直接顯示output在html,doc,ppt
++    2. 可把輸出的html或ppt直接扔到網絡分享
+
+----------------------------------------------------------------------------------------------
+
+# *Markdown語法*  
+
+可以隨便輸入文字
+End a line with two spaces  
+to start a new paragraph.
+
+
+```
+或是把字框起來，可以放code
+```
+
+----------------------------------------------------------------------------------------------
+
+####斜體、粗體、加橫線
+```
+*italics* and _italics_
+```
+*italics* and _italics_  
+
+
+```
+**bold** and __bold__  
+```
+**bold** and __bold__  
+
+
+```
+~~strikethrough~~  
+```
+~~strikethrough~~  
+
+----------------------------------------------------------------------------------------------
+
+####附加連結
+```
+[link](www.rstudio.com)  
+```
+[link](www.rstudio.com)  
+
+```
+image: ![](https://www.r-project.org/Rlogo.png)  
+```
+image: ![](https://www.r-project.org/Rlogo.png)  
+
+----------------------------------------------------------------------------------------------
+
+```
+## Header 2    
+```
+
+## Header 2    
+### Header 3    
+#### Header 4    
+##### Header 5    
+###### Header 6    
+
+----------------------------------------------------------------------------------------------
+
+####加數學公式  
+
+```
+$A = \pi*r^{2}$
+```
+inline equation: $A = \pi*r^{2}$  
+
+```
+$$A = \pi*r^{2}$$
+```
+Display equation: $$A = \pi*r^{2}$$
+
+----------------------------------------------------------------------------------------------
+
+
+
+* 按「+」「-」「*」號後空一格，輸入文字 
+    * 四個空白會後移一個點  
+        + 八個空白會後移兩個點
+            +
+      - 123
+      * 234
+      
+      
+<br/>
+<br/>
+        
+1. 如果你想用1234也可以
+2. item 2  
+    2.1. sub-item 1  
+    2.2. sub-item 2  
+
+----------------------------------------------------------------------------------------------
+
+#R Chunk
+
+
+```{r}
+# R chunk
+# 裏面可以寫R語法，跟平常一樣
+# 要注意，每次輸出html，都會整個.rmd重跑，所以library那些都要寫在chunk裏面
+```
+
+
+```{r, message=TRUE}
+#default: message=TRUE
+library(dplyr)
+```
+
+------------------------------------------------------------
+#### 無設定
+
+```{r}
+paste('aaa')
+```
+ 
+ 
+------------------------------------------------------------
+#### echo=F
+
+```{r echo=FALSE}
+paste('aaa')
+```
+
+------------------------------------------------------------
+
+```{r eval=FALSE}
+paste('aaa')
+```
+
+------------------------------------------------------------
+
+```{r, fig.align='center', fig.height=5 , fig.width=8}
+plot(iris$Sepal.Length,iris$Sepal.Width)
+```
+
+------------------------------------------------------------
+
+
+###如果想output顯示在console,可以按上方的齒輪調整
+
+###如果你想要每個chunk都隱藏message及warning,不需逐個設定,設定多數放在最開始執行
+```{r setup}
+knitr::opts_chunk$set(
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+
+----------------------------------------------------------------------------------------------
+
+#其他語法
+
+####除了R之外，還可以寫python、C++及SQL語法
+
+
+```{python}
+#python
+print "hello world!"
+```
+
+#References
+[rmarkdown cheatsheet](https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf)  
+[rmarkdown reference](https://www.rstudio.com/wp-content/uploads/2015/03/rmarkdown-reference.pdf)
+[Markdown Basics](http://rmarkdown.rstudio.com/authoring_basics.html)
+
+<br/>
+
+
+
+

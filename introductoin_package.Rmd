@@ -1,0 +1,468 @@
+---
+title: "Introduction of packages."
+author: "ponponlin"
+date: "Feb ,16, 2017"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+---
+<br/>
+
+------------------------------------------------------------------------------------
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+	warning = FALSE
+  )
+
+```
+
+# **1. rvest**
+
+rvest 是一個爬蟲的套件，搭配下載 xml2 套件使用。
+因為像是新聞或即時動態的網頁更新相當快速，所以利用爬蟲的方式抓取網頁上想要的資訊，會相當省時省力。
+
+```{r }
+library(rvest)
+library(xml2)
+library(dplyr)
+
+```
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+### **1.1. HTML** 
+
+在介紹rvest套件前先介紹一下網頁也就是我們常看到的以 https://... 開頭的網頁格式，而目前網路上大多的形式都是以 HTML 的格式呈現的，我們要抓取網頁裡要的東西，通常需要知道原始碼裡的名字
+
+以下是一個簡單的網頁原始碼模樣：
+
+```{r eval=FALSE}
+<html>
+  <head>
+    <title>網頁標題</title>
+  </head>
+  <body>
+    <div class="container">
+      <p>網頁內容</p>
+      <p>
+        <ul>
+          <li>foo</li>
+          <li>bar</li>
+        </ul>
+      </p>
+    </div>
+  </body>
+</html>
+```
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+### **1.2. SelectorGadget**
+
+使用 CSS 選擇器的方式，到 google chorm 下載
+[SelectorGadget](https://chrome.google.com/webstore/detail/selectorgadget/mhjhnkcfbdhnjickkkdbjoemdmbfginb?hl=zh-TW) 這個免費的軟體，可以方便篩選在爬蟲時所需要的CSS選擇器。
+
+
+![](/Users/apple/nicole/nccu/YUEteam/plot/selector.png)
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+### **1.3. rvest code**
+
+開始介紹這個套件會使用到的函數
+
+* read_html ( "網址" )：讀取網頁
+* html_nodes ( 讀取後的東西 , "CSS" )：給 CSS 選擇器
+* html_text ( nodes選擇完的東西 )：轉為文字
+* html_attr ( "herf" )：擷取網址
+
+以下為擷取自由時報 [Liberty Times Net](http://news.ltn.com.tw/list/BreakingNews) 的新聞標題 :
+
+
+```{r }
+url_news <- "http://news.ltn.com.tw/list/BreakingNews"
+read_news <- read_html(url_news)  
+nodes_news <- html_nodes(read_news, ".picword") 
+text_news <- html_text(nodes_news) %>% as.data.frame()
+news_location <- html_attr(nodes_news , "href") %>% as.data.frame()
+head(text_news)
+head(news_location)
+```
+
+![](/Users/apple/nicole/nccu/YUEteam/plot/自由時報截圖.png)
+
+------------------------------------------------------------------------------------
+
+#### **另一種情況**
+
+以下直接利用 dplyr 的指令爬自由時報體育新聞[Sport](http://sports.ltn.com.tw/) 的標題，注意到不一樣的地方是給的 CSS 選擇器結果不同，由於網頁設計上，其實一般的情況應該都會是不同的。
+
+```{r }
+url_sport <- "http://sports.ltn.com.tw/"
+sport <- read_html(url_sport) %>% html_nodes(".content .list_title") %>% html_text() %>% as.data.frame() 
+sport_location <- read_html(url_sport) %>% html_nodes(".content .listA.boxTitle a") %>% html_attr("href") %>% as.data.frame()
+```
+
+**使用SelectorGadget 選區塊時按在標題上**
+
+![](/Users/apple/nicole/nccu/YUEteam/plot/體育標題.png)
+
+<br/>
+
+**使用SelectorGadget 選區塊時不要按在標題上，要點在旁邊，框框會比點在標題上面大，所以選出來的果不一樣**
+
+![](/Users/apple/nicole/nccu/YUEteam/plot/體育網址.png)
+
+<br/>
+
+**隔一天發現使用SelectorGadget 選擇器選出來的結果不同，像這種即時的網頁其實有點會隨時做更新**
+
+![](/Users/apple/nicole/nccu/YUEteam/plot/體育網址2.png)
+
+<br/>
+
+
+**以下為讀取出來的結果**
+
+讀取網址的結果都會有兩個重複的結果，這在SelectorGadget 選取的時候其實就可以發現
+
+```{r echo=FALSE}
+head(sport)
+sport_location[1:10,]
+```
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+### **1.4. 抓取多頁**
+
+利用爬蟲的方式搭配迴圈，一次抓取多頁的新聞標題，同樣以自由時報的新聞網頁為範例，假設我們要一次抓取五頁的新聞標題，先看網址的特性：只差在 page= 多少，代表是第幾頁，所以就可以快速地用迴圈幫我們執行
+```
+http://news.ltn.com.tw/list/BreakingNews?page=1
+http://news.ltn.com.tw/list/BreakingNews?page=2
+```
+
+```{r}
+title <- NULL
+for (i in 1:5) {
+  pathfile <- paste("http://news.ltn.com.tw/list/BreakingNews?page=",i,sep = "")
+  mtitle <- read_html(pathfile) %>% html_nodes(".picword") %>% html_text() 
+  title <- c(title,mtitle)
+}
+title <- as.data.frame(title)
+
+```
+
+**讀取出來的結果：**
+
+```{r echo=FALSE}
+title[1:35,]
+```
+
+**抓取不只一項：標題+時間**
+
+```{r echo=FALSE}
+# **假設要再加上新聞時間，小問題：如何處理抓取下來的資料？**
+ttitle <- read_html(url_news) %>% html_nodes("#newslistul span , .picword") %>% html_text() %>% as.data.frame()
+ttitle[1:36,]
+```
+<br/>
+
+------------------------------------------------------------------------------------
+
+
+# **2. lattice** 
+
+```
+R graphics:
+1.	Traditional graphics
+2.	Grid graphics: 
+    1. Lattice: base on Trellis graphics
+    2.ggplot2:inspired by “Grammar on Graphics”
+```
+
+lattice 系統是根據 grid為基礎所發展出來的一套繪圖系統，對於各種常見的圖形提供了比較高階的繪圖函數，跟傳統的 base 系統相較之下，lattice 主要有兩個特點：
+
+第一是所有的繪圖結果都可以儲存在變數當中（不像 base 是直接畫在螢幕上的），也就是說在 lattice 系統之下，使用者可以對畫出來的圖形做進一步的修改，然後再重新畫出新的結果，對於一系列相類似的圖組也可以使用這樣的技巧加速繪圖的速度，另外也可以把繪圖結果儲存下來，供日後使用。
+lattice 的第二個特色則是一張圖形中可以包含多個子繪圖區域，亦即使用者可以將多張子圖形直接放在同一張圖中一起比較，省去了自己手動合併多張圖形的困擾。
+
+**lattice default settings**
+
+![](/Users/apple/nicole/nccu/YUEteam/plot/settings.png)
+
+------------------------------------------------------------------------------------
+
+**範例資料**
+
+```
+Package : mangoTraining 內建資料 
+Data : tubeData 
+1050 observations with 9 variables
+
+Line: A factor with 10 levels, one for each London tube line. 
+Month: categorical, the month of the observation. 
+Scheduled: the scheduled running time.
+Excess: The excess running time.
+TOTAL: the total running time.
+Opened: categorical, the year the line opened. Length: the line length.
+Type: categorical, the type of tube line. 
+Stations: the number of stations on the line.
+```
+
+```{r echo=FALSE}
+library("lattice")
+library("mangoTraining")
+head(tubeData)
+```
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+### **2.1. histogram**
+
+利用變數 Excess 來畫直方圖瞭解一下資料狀態
+
+```{r}
+histogram( ~ Excess, data = tubeData, col = "red",
+           main = "Histogram of Excess Time",
+           xlab = "Excess Journey Times (Hours)",
+           nint = 25)
+histogram( ~ Excess | Type, data = tubeData ,
+           main = "Histogram of Excess Time",
+           xlab = "Excess Journey Times (Hours)",
+           nint = 25)
+
+```
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+
+### **2.2. xyplot**
+
+```{r}
+xyplot(Excess ~ Month , data = tubeData, 
+       type = c("p", "smooth"))
+       
+xyplot(Excess ~ Month , data = tubeData, groups = Line,
+      auto.key = list(space="right"),
+       main = "Excess Journey Times vs Month by Line",
+       xlab = "The Month of The Observation",
+       ylab = "Excess Journey Times (Hours)")
+xyplot(Excess ~ Month | Line, data = tubeData, col = "blue",layout=c(5,2),
+       main = "Excess Journey Times vs Month by Line",
+       xlab = "The Month of The Observation",
+       ylab = "Excess Journey Times (Hours)")
+
+xyplot(Excess ~ Month , data = tubeData, groups = Line,type="l",
+       auto.key = list(space="right"),
+       main = "Excess Journey Times vs Month by Line",
+       xlab = "The Month of The Observation",
+       ylab = "Excess Journey Times (Hours)")
+xyplot(Excess ~ Month | Line, data = tubeData, col = "blue",type = "l",layout=c(5,2),
+       main = "Excess Journey Times vs Month by Line",
+       xlab = "The Month of The Observation",
+       ylab = "Excess Journey Times (Hours)")
+xyplot(Excess ~ Month , data = tubeData, subset = Line =="Central",
+       col = "blue",type = "l",
+       main = "Excess Journey Times vs Month of Central",
+       xlab = "The Month of The Observation",
+       ylab = "Excess Journey Times (Hours)")
+xyplot(Excess ~ Month | cut(Length, c(0, 20, 50, 100)), data = tubeData,
+       col = "blue", layout = c(3, 1),
+       main = "Excess Journey Times vs Month by Length (km)",
+       xlab = "The Month of The Observation",
+       ylab = "Excess Journey Times (Hours)")
+```
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+
+### **2.3. bwplot**
+
+```{r}
+bwplot( ~Excess, data = tubeData)
+bwplot(Line ~ Excess  , data = tubeData,
+       main = "Excess Journey Times by Line",
+       xlab = "Excess Journey Times (Hours)")
+
+bwplot(~ Excess | cut(Length, c(0, 20, 50, 100)) , data = tubeData, layout = c(1, 3),
+       main = "Excess Journey Times by Length (km)",
+       xlab = "Excess Journey Times (Hours)")
+
+bwplot(Type ~ Excess | cut(Length, c(0, 20, 50, 100)) , data = tubeData,layout = c(1, 3),
+       main = "Excess Journey Times by Length (km) & Type",
+       xlab = "Excess Journey Times (Hours)")
+
+```
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+
+### **2.4. densityplot**
+
+```{r}
+densityplot(~ Excess, data = tubeData,lwd = 2, 
+            main = "Density of Excess Time",
+            xlab = "Excess Journey Times (Hours)") 
+
+densityplot( ~ Excess,
+             data = tubeData,
+             groups = Line,
+             type = "n",
+             auto.key = list(space = "right"), lwd = 1,
+             main = "Density of Excess Time Separated Plots by Lines", 
+             xlab = "Excess Journey Times (Hours)")
+
+```
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+
+### **2.5. qqmath**
+
+```{r}
+qqmath( ~ Excess, data = tubeData, main = "QQplot of Excess Time")
+qqmath( ~ Excess, data = tubeData, groups = Type,
+        auto.key = list("top", columns=2),
+        main = "QQplot of Excess Time by Type")
+
+```
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+
+### **2.6. dotplot**
+
+```{r}
+dotplot(Line ~ Length , data = tubeData)
+dotplot(reorder(Line, Length) ~ Length , data = tubeData)
+
+```
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+### **2.7. cloud**
+
+```{r}
+cloud(Excess ~  Length * Month, data = tubeData)
+
+```
+
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+### **2.8. splom**
+
+```{r}
+splom(~tubeData[2:5])
+splom(~tubeData[2:5], groups = Type, data = tubeData,
+      auto.key = list( "top", columns=2))
+
+```
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+### **2.9. barchart**
+
+```{r}
+barchart( ~ Line, data = tubeData, groups = Type, auto.key = TRUE)
+```
+
+------------------------------------------------------------------------------------
+
+**用另一組皆為類別型的資料來看 barchart的使用**
+
+```
+Package : MASS 內建資料 
+Data : housing 出租房屋滿意度調查.
+72 rows, 5 variables.
+
+Sat: 屋主對目前房屋的滿意度: High, Medium, Low.
+Infl: 屋主對資產管理的認知: High, Medium, Low.
+Type: 房屋型式: Tower, Atrium, Apartment, Terrace. 
+Cont: 經由其他房客提供可以接觸房客的機會: Low, High 
+Freq: 每一分類的人數.
+```
+
+```{r echo=FALSE}
+library("MASS")
+head(housing)
+```
+
+```{r}
+barchart(Freq ~ Infl | Type + Cont, groups = Sat,
+         data = housing, stack = TRUE)
+barchart(xtabs(Freq ~ Sat + Infl + Type + Cont, data = housing))
+dotplot(Sat+Infl ~ Freq | Type+Cont, data = housing , auto.key = TRUE)
+
+```
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+### **2.10. levelplot**
+
+如果資料是格狀的地理資訊，可以直接利用 levelplot 函數繪圖，而 wireframe 函數可以繪製 3D圖
+
+```
+Data : volcano
+紐西蘭的 Auckland 附近約有 50 座火山，Maunga Whau 是其中的一座，volcano 是一組 87 × 61 矩陣，紀錄 Maunga Whau 10m × 10m 格狀的地理資訊.
+```
+
+```{r}
+levelplot(volcano)
+wireframe(volcano, drape = TRUE)
+```
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+
+# **3. Reference** 
+
+[http://data-sci.info/2015/09/20/rvest_01/](http://data-sci.info/2015/09/20/rvest_01/)
+[https://blog.gtwang.org/r/rvest-web-scraping-with-r/](https://blog.gtwang.org/r/rvest-web-scraping-with-r/)
+[http://r3dmaotech.blogspot.tw/2016/04/r-rvest.html](http://r3dmaotech.blogspot.tw/2016/04/r-rvest.html)
+[http://r3dmaotech.blogspot.tw/2016/05/r-rvest.html](http://r3dmaotech.blogspot.tw/2016/05/r-rvest.html)
+[https://www.youtube.com/watch?v=gSbuwYdNYLM](https://www.youtube.com/watch?v=gSbuwYdNYLM)
+[http://brucehau.blogspot.tw/2016/09/rrvest.html](http://brucehau.blogspot.tw/2016/09/rrvest.html)
+[http://brucehau.blogspot.tw/2016/09/rrvest_22.html](http://brucehau.blogspot.tw/2016/09/rrvest_22.html)
+
+
+[https://blog.gtwang.org/r/r-data-exploration-and-visualization/](https://blog.gtwang.org/r/r-data-exploration-and-visualization/)
+[http://rstudio-pubs-static.s3.amazonaws.com/12556_4e02f5564dc24b57b7a8f6d95d2a5cf7.html](http://rstudio-pubs-static.s3.amazonaws.com/12556_4e02f5564dc24b57b7a8f6d95d2a5cf7.html)
+
+台北大學--林建甫老師巨量資料講義
+
+<br/>
+<br/>
