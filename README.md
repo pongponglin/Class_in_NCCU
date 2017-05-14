@@ -1,7 +1,5 @@
 # R_nccu
 
--------
-
 #### documents
 * highcharter
 * packagesintroduction :rvest.R, lattice.R , rvest_lattice.Rmd
