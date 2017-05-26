@@ -15,3 +15,10 @@
 * PCA : Principal Component Analysis
 * CCA : Canonical Correlation Analysis
 * classification : classification tree LDA QDA Logistic NN
+#### Packages
+* rvest
+* lattice
+* highcharter
+#### Other
+* cov_matrix_test : 檢定共變異矩陣相等
+* share520 : 2017.5.20業師分享Demo
