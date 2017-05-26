@@ -1,0 +1,334 @@
+---
+title: "檢定共變異數矩陣相等"
+author: "ponponlin"
+date: "May 26, 2017"
+output: 
+  ioslides_presentation: 
+    highlight: tango
+    smaller: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+	warning = FALSE
+  )
+library(dplyr)
+library(MVN)
+```
+
+## Review
+
+- Before QDA ...
+- 變數為多元常態的假設
+- 共變異數矩陣為不相等：LDA -> QDA 
+
+## Box’s M Test
+[Box’s M Test Basic Concepts](http://www.real-statistics.com/multivariate-statistics/boxs-test-equality-covariance-matrices/boxs-test-basic-concepts/)
+
+- Package **biotools**
+
+```{r, eval=FALSE}
+library(biotools)
+
+# 錯誤: package 'tcltk' could not be loaded 停止執行
+# tcltk2
+```
+
+[神人解](http://www.public.iastate.edu/~maitra/stat501/Rcode/BoxMTest.R)
+
+- 每個群的個數最好超過20個
+- QDA -> 通常是把小群拿掉 或是跟別人合併
+
+```{r eval=FALSE}
+# cl must be factor
+BoxMTest(X, cl, alpha=0.05) 
+```
+
+## BoxMTest
+
+```{r echo=FALSE}
+BoxMTest <- function(X, cl, alpha=0.05) { 
+   if (alpha <= 0 || alpha >= 1) 
+    stop('significance level must be between 0 and 1') 
+  g = nlevels(cl) ## Number of groups. 
+  n = table(cl) ## Vector of groups-size. 
+  N = nrow(X) 
+  p = ncol(X) 
+  bandera = 2 
+  if (any(n >= 20))
+    bandera = 1 
+  ## Partition of the group covariance matrices. 
+  
+  covList <- tapply(as.matrix(X), rep(cl, ncol(X)), function(x, nc) cov(matrix(x, nc = nc)),
+                    ncol(X))
+  deno = sum(n) - g 
+  suma = array(0, dim=dim(covList[[1]])) 
+  for (k in 1:g) 
+    suma = suma + (n[k] - 1) * covList[[k]] 
+  Sp = suma / deno ## Pooled covariance matrix. 
+  Falta=0 
+  for (k in 1:g) 
+    Falta = Falta + ((n[k] - 1) * log(det(covList[[k]]))) 
+  
+  MB = (sum(n) - g) * log(det(Sp)) - Falta ## Box's M statistic. 
+  suma1 = sum(1 / (n[1:g] - 1)) 
+  suma2 = sum(1 / ((n[1:g] - 1)^2)) 
+  C = (((2 * p^2) + (3 * p) - 1) / (6 * (p + 1) * (g - 1))) * 
+    (suma1 - (1 / deno)) ## Computing of correction factor. 
+  if (bandera == 1)
+  { 
+    X2 = MB * (1 - C) ## Chi-square approximation. 
+    v = as.integer((p * (p + 1) * (g - 1)) / 2) ## Degrees of freedom. 
+    ## Significance value associated to the observed Chi-square statistic. 
+    P = pchisq(X2, v, lower=FALSE)  #RM: corrected to be the upper tail 
+    cat('------------------------------------------------\n'); 
+    cat(' MBox Chi-sqr. df P\n') 
+    cat('------------------------------------------------\n') 
+    cat(sprintf("%10.4f%11.4f%12.i%13.4f\n", MB, X2, v, P)) 
+    cat('------------------------------------------------\n') 
+    if (P >= alpha) { 
+      cat('Covariance matrices are not significantly different.\n') 
+    } else { 
+      cat('Covariance matrices are significantly different.\n') 
+    } 
+    return(list(MBox=MB, ChiSq=X2, df=v, pValue=P)) 
+  }
+  else
+  { 
+    ## To obtain the F approximation we first define Co, which combined to 
+    ## the before C value are used to estimate the denominator degrees of 
+    ## freedom (v2); resulting two possible cases. 
+    Co = (((p-1) * (p+2)) / (6 * (g-1))) * (suma2 - (1 / (deno^2))) 
+    if (Co - (C^2) >= 0) { 
+      v1 = as.integer((p * (p + 1) * (g - 1)) / 2) ## Numerator DF. 
+      v21 = as.integer(trunc((v1 + 2) / (Co - (C^2)))) ## Denominator DF. 
+      F1 = MB * ((1 - C - (v1 / v21)) / v1) ## F approximation. 
+      ## Significance value associated to the observed F statistic. 
+      P1 = pf(F1, v1, v21, lower=FALSE) 
+      cat('\n------------------------------------------------------------\n') 
+      cat(' MBox F df1 df2 P\n') 
+      cat('------------------------------------------------------------\n') 
+      cat(sprintf("%10.4f%11.4f%11.i%14.i%13.4f\n", MB, F1, v1, v21, P1)) 
+      cat('------------------------------------------------------------\n') 
+      if (P1 >= alpha) { 
+        cat('Covariance matrices are not significantly different.\n') 
+      } else { 
+        cat('Covariance matrices are significantly different.\n') 
+      } 
+      return(list(MBox=MB, F=F1, df1=v1, df2=v21, pValue=P1)) 
+    } else { 
+      v1 = as.integer((p * (p + 1) * (g - 1)) / 2) ## Numerator df. 
+      v22 = as.integer(trunc((v1 + 2) / ((C^2) - Co))) ## Denominator df. 
+      b = v22 / (1 - C - (2 / v22)) 
+      F2 = (v22 * MB) / (v1 * (b - MB)) ## F approximation. 
+      ## Significance value associated to the observed F statistic. 
+      P2 = pf(F2, v1, v22, lower=FALSE) 
+      
+      cat('\n------------------------------------------------------------\n') 
+      cat(' MBox F df1 df2 P\n') 
+      cat('------------------------------------------------------------\n') 
+      cat(sprintf('%10.4f%11.4f%11.i%14.i%13.4f\n', MB, F2, v1, v22, P2)) 
+      cat('------------------------------------------------------------\n') 
+      
+      if (P2 >= alpha) { 
+        cat('Covariance matrices are not significantly different.\n') 
+      } else { 
+        cat('Covariance matrices are significantly different.\n') 
+      } 
+      return(list(MBox=MB, F=F2, df1=v1, df2=v22, pValue=P2)) 
+    } 
+  }
+}
+```
+
+```{r}
+BoxMTest(iris[,-5], iris[,5])
+```
+
+## Iris data covariance matrix
+
+```{r iris, echo=FALSE}
+data("iris")
+filter(iris, Species == "setosa" )[,-5] %>% cov
+filter(iris, Species == "versicolor"  )[,-5] %>% cov
+filter(iris, Species == "virginica" )[,-5] %>% cov
+```
+
+## Multivariate normal-1
+
+```{r eval=FALSE}
+library(MVN)
+mardiaTest(iris[-5],qqplot=F)
+hzTest(iris[,-5],qqplot=F) 
+roystonTest(iris[,-5],qqplot=F) 
+```
+
+## Multivariate normal-2
+
+```{r }
+mardiaTest(iris[-5],qqplot=F)
+```
+
+## Data1-1 : two variables with same covariance
+
+```{r echo=FALSE}
+set.seed(100)
+x=matrix(rnorm(200), ncol = 100)
+A <- matrix(c(2,0.5,0.5,1), ncol = 2)
+a=t(chol(A))
+x1 <- a %*% x %>% t() %>% as.data.frame()
+x1$y <- sample(2,100, replace = T) %>% as.factor()
+table(x1$y)
+
+filter(x1, y==1)[-3] %>% cov()
+filter(x1, y==2)[-3] %>% cov()
+```
+
+## Data1-2 : Multivariate Test
+
+```{r }
+mardiaTest(x1[-3],qqplot=F)
+```
+
+## Data1-3 : Box'M Test
+
+```{r}
+BoxMTest(x1[,-3], x1$y)
+```
+
+## Data2-1 : two variables with different covariance
+
+```{r echo=FALSE}
+n1 <- sample(c(30:50), 1)
+x=matrix(rnorm(n1*2), ncol = n1)
+A <- matrix(c(1,0.7,0.7,2), ncol = 2)
+a=t(chol(A))
+x3 <- a %*% x %>% t() %>% as.data.frame()
+x3$y <- as.factor(1)
+n2 <- sample(c(30:50), 1)
+x=matrix(rnorm(n2*2), ncol = n2)
+A <- matrix(c(1,0.2,0.2,2), ncol = 2)
+a=t(chol(A))
+x4 <- a %*% x %>% t() %>% as.data.frame()
+x4$y <- as.factor(2)
+dx <- rbind(x3,x4)
+table(dx$y)
+cov(x3[,-3])
+cov(x4[,-3])
+```
+
+## Data2-2 : Multivariate Test
+
+```{r }
+mardiaTest(dx[-3],qqplot=F)
+```
+
+## Data2-3 : Box'M Test
+```{r}
+BoxMTest(dx[,-3], dx$y)
+```
+
+## Data3-1 : three variables with same covariance
+
+```{r echo=FALSE}
+x=matrix(rnorm(300), ncol = 100)
+A <- matrix(c(1,0.5,0.2,0.5,1,0.8,0.2, 0.8,1), ncol = 3)
+a=t(chol(A))
+x2 <- a %*% x  %>% t() %>% as.data.frame()
+x2$y <- sample(3,100, replace = T) %>% as.factor()
+table(x2$y)
+
+filter(x2, y==1)[-4] %>% cov()
+filter(x2, y==2)[-4] %>% cov()
+filter(x2, y==3)[-4] %>% cov()
+
+```
+
+## Data3-2 : Multivariate Test
+
+```{r }
+hzTest(x2[-4],qqplot=F)
+```
+
+## Data3-3 : Box'M Test
+```{r}
+BoxMTest(x2[,-4], x2$y)
+```
+
+## Data4-1 : three variables with different covariance
+
+```{r echo=FALSE}
+n1 <- sample(c(20:50), 1)
+x=matrix(rnorm(3* n1), ncol = n1)
+A <- matrix(c(2,0.5,0.2,0.5,1,0.8,0.2, 0.8,1), ncol = 3)
+a=t(chol(A))
+x1 <- a %*% x  %>% t() %>% as.data.frame()
+x1$y <- as.factor(1)
+
+n2 <- sample(c(30:50), 1)
+x=matrix(rnorm(3 * n2), ncol = n2)
+A <- matrix(c(1,0.1,0.2,0.1,1,0.3,0.2, 0.3,1), ncol = 3)
+a=t(chol(A))
+x2 <- a %*% x  %>% t() %>% as.data.frame()
+x2$y <- as.factor(2)
+
+n3 <- sample(c(20:50), 1)
+A <- matrix(c(2,0.4,0.2,0.4,1,0.8,0.2, 0.8,2), ncol = 3)
+x=matrix(rnorm(3 * n3), ncol = n3)
+a=t(chol(A))
+x3 <- a %*% x  %>% t() %>% as.data.frame()
+x3$y <- as.factor(3)
+
+d3 <- rbind(x1,x2) %>% rbind(x3)
+table(d3$y)
+filter(d3, y==1)[-4] %>% cov()
+filter(d3, y==2)[-4] %>% cov()
+filter(d3, y==3)[-4] %>% cov()
+```
+
+## Data3-2 : Multivariate Test
+
+```{r }
+hzTest(d3[-4],qqplot=F)
+```
+
+## Data3-3 : Box'M Test
+```{r}
+BoxMTest(d3[,-4], d3$y)
+```
+
+## Seed data
+
+```{r echo=FALSE}
+seed <- read.table("Seeds.txt",h=T)
+seed[,8] <- as.factor(seed[,8])
+head(seed)
+```
+
+#### **test each variables**
+
+```{r echo=FALSE}
+uniNorm(seed[,-8], type="Lillie", desc=T)$`Lilliefors (Kolmogorov-Smirnov)'s Normality Test`
+```
+
+## Seed data : Box'M Test
+
+```{r }
+BoxMTest(seed[,c(3,6)], seed$Y)
+```
+
+## Reference
+
+[Testing Homogeneity of Covariance Matrices](https://www.ibm.com/support/knowledgecenter/SSLVMB_23.0.0/spss/tutorials/glmm_patlos_homcov.html)
+
+[Discriminant Analysis](http://mail.im.tku.edu.tw/~cpyu/SPSS/DiscriminantAnalysis.ppt)
+
+[Box’s M Test Basic Concepts](http://www.real-statistics.com/multivariate-statistics/boxs-test-equality-covariance-matrices/boxs-test-basic-concepts/)
+
+[神人解](http://www.public.iastate.edu/~maitra/stat501/Rcode/BoxMTest.R)
+
+# Thank
+
+
