@@ -1,0 +1,356 @@
+---
+title: "統計計算與模擬 Homework02"
+author: "105354003林芃彣 ＆ 105354030陳媚"
+date: "Mar, 27, 2017"
+output: html_document
+---
+
+<br/>
+
+---------------------------------------------------------------------------
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+	warning = FALSE
+  )
+
+```
+
+```{r echo=FALSE}
+library("dplyr")
+library("nortest")
+```
+
+## 第一題
+(a) Write a computer program using the Mid-Square 3/7 Method using 6 digits to generate 10,000 random numbers ranging over [0, 999999]. Use the Kolmogorov-Smirnov Goodness-of-fit test to see if the random numbers that you create are uniformly distributed. (Note: You must notify the initial seed number used, and you may adapt 0.05 as the  value. Also, you may find warning messages for conducting the Goodness-of-fit test, and comment on the Goodness-of-fit test. ) 
+(b) Consider the random number generator $X_{i+1} = 69069X_i (mod2^{32})$ , i.e., the generator used by Vax before 1993. Use both the $\chi^2$  and Kolmogorov-Smirnov Goodness-of-fit tests to check if the data are from U(0,1) distribution. Compare the result with those in (a) & (b), and discuss your finding based on the comparison.
+(c) In class, we often use simulation tools in R, such as “sample” or “ceiling(runif),” to generate random numbers from 1 to k, where k is a natural number. Using graphical tools (such as histogram) and statistical tests to check which one is a better tool in producing uniform numbers between 1 and k. (Hint: You may check if the size of k matters by, for example, assigning k a small and big value.)
+
+* (a)：the Mid-SquareMethod :隨機選取一個 m 位數的種子，平方後，得到的數不足 2m 在前面補 0 ，取中間的m個數作為新的數
+
+* 作法：先隨機生成一個6位數的 seed，平方後得到數無論是否需要補0，新的數都是從千位數起往前取 6 個數，所以先取 $10^9$位數(通過取餘數的方法)，再減去千位數，再除以 1000 得到新的數，由 ks.test 的檢定顯示這個方式取到的亂數有重複值， pvalue 很小說明顯著，平方取中法得到的亂數不是一個 uniform 分佈，用 jitter 給重複值加躁，這個方法不会影響數據分布，也不会影響最终的檢測结果。
+
+```{r}
+c <- 100000:999999
+seed = sample(c,1)
+seed
+x = seed
+m = NULL  
+for (i in 1:10000){
+  a = (x^2) %% 1000000000
+  x = (a-(a%%1000))/1000
+  m <- c(m , x)
+}
+
+ks.test(jitter(m),"punif",1,999999)
+
+```
+
+* (b)：選一個1:1000的隨機數作為種子，通過線性同餘法得到的亂數除最大的數，得到一個 uniform(0,1) 之間的亂數，ks.test 的結果 pvalue 不顯著，說明不拒絕來自 uniform 分佈的假設，另外從卡方檢定的 pvalue 結果也說明不顯著，也是不拒絕來自一個 uniform 分佈，對比 (a)(b) 兩種做法可以看出：(b) 取出的亂數較好。
+
+```{r}
+seed = sample(c(1:1000),1)
+x = seed
+m = NULL
+for (i in 1:10000){
+  a = x*69069
+  x = a%%(2^32)
+  m <- c(m,x)
+}
+ks.test(m/max(m),"punif")  
+y1 = matrix(m/max(m),nrow=4,byrow=F)   #卡方檢定
+y2 = apply(y1,2,rank)  
+y3 = y2[1,]*1000 + y2[2,]*100 + y2[3,]*10 + y2[4,]
+a1 = table(y3)
+#方法二：chisq.test(a1)
+c = 2500/24
+p = sum((a1-c)^2/c)  
+1-pchisq(p,23) 
+```
+
+* (c)：想要看用 sample 和 ceiling 兩種方法生成在 (1：k) 中的 N 個亂數，用圖像和統計檢定查看哪種方法更優，考慮影響亂數生成的因素有 k ，所以分別取 k=100,10000，N=1000。
+
+* 圖像觀察法：k=100 時，無法區分確定哪個方法得到的亂數更接近 uniform 分佈；k=10000 時，ceiling 方法取得的亂數更接近 uniform 分佈。
+            
+* ks.test : 用這 4 種組合個產生 1000 組做檢定，在 $\alpha=0.05$ 下，拒絕的次數如下方表格所示， ceiling 拒絕的次數稍微比 sample 多了一點點，可以說差距很微小。
+
+```{r}
+A = NULL
+t1 <- function(x){ifelse (ks.test(jitter(x),"punif",1,100)$p.value<0.05,1,0)}
+t2 <- function(x){ifelse (ks.test(jitter(x),"punif",1,10000)$p.value<0.05,1,0)}
+for (i in 1:1000){
+y1 = sample(1:100,1000,replace=TRUE)
+y2 = ceiling(runif(1000,1,100))
+y3 = sample(1:10000,1000,replace=TRUE)
+y4 = ceiling(runif(1000,1,10000))
+a <- matrix(c(y1,y2),nrow=2,byrow=T)
+b <- matrix(c(y3,y4),nrow=2,byrow=T)
+a1 <- matrix(c(apply(a,1,t1),apply(b,1,t2)),nrow=1,byrow=T)
+A <- rbind(A,a1)
+}
+B = matrix(apply(A,2,sum),nrow=2,byrow=T)
+colnames(B) <- c("sample","ceiling")
+row.names(B) <- c("k=100", "k=10000")
+B
+```
+
+```{r echo=FALSE}
+par(mfrow=c(2,2))
+hist(y1, main = "sample k=100")
+hist(y2, main = "ceiling k=100")
+hist(y3, main = "sample k=10000")
+hist(y4, main = "sample k=10000")
+```
+
+<br/>
+
+----------------------------------------------------------------------------------
+
+## 第二題
+(a) Verify that the sequence of numbers from, there are no runs up of length greater than 4. Generate 1,000 random numbers and see if $X_{i+1} = 781X_i+387 (mod1000)$ there are no runs with length greater than 4. Also, use graphical tools to explore the possible patterns and discuss if  is a good random number generator. 
+(b) Use $X_{i+1} = 781X_i+387 (mod1000)$ to generate random numbers from the standard normal distribution (i.e., via inversion) and apply tools in Time Series Analysis (e.g., acf and pacf) to verify whether they satisfy the properties of random samples from the standard normal distribution. 
+
+* 利用給的方程式產生亂數，亂數會落在 0~999 之間，要驗證 runs 的長度不超過 4 ，連續的 0 或 1 為一個 run，因此就代表驗證 0 或 1 連續出現的次數不超過 4 個，因此先照著這個亂數產生的方法產生1000個亂數，而 $X_i$ 是用 sample 的方式選取，在這組亂數中，若後面的數字大於前面的數字定義為 1 ，小於則為 0 ，產生 999 位從上一個數字到下一個數字關係的數列，接著找到0 1變號的位置，也就是從上一個 run 到下一個 run 的地方，再將這兩個位置相減，就可以得出到下一個 run 之前，這個 0 或 1 連續出現了幾次，而題目就是要我們驗證這個長度不會超過 4 ，也就是不會有連續的 0 或 1 出現四次以上，那樣就代表這組數字不太隨機了，結果從注組亂數中去做檢驗發現，最大長度的 run 為 5，代表這是一組不隨機的亂數。
+
+* 先將原本為 0~999 的亂數，做第一張直方圖，可以看到每個區間的分布很平均，接近 U(0,1)，而再下一張的散佈圖可以看出其實數字是有一個規律的狀態，代表這個亂數的週期。
+
+```{r }
+v <- vector(length = 1000)
+x=sample(999,1)
+x
+for (i in 1:1000) {
+ x <- (781*x+387)%%1000
+  v[i] <- x
+}
+
+a <-(v[-1] - v[-length(v)] > 0)*1 
+b <- which(a[-1] != a[-length(a)]) 
+c <- b[-1] - b[-length(b)] 
+max(c)
+```
+
+```{r echo=FALSE}
+hist(v/1000)
+plot(v/1000) 
+```
+
+* b 小題要用 acf , pacf 來看是不是來自標準常態分配的亂數，把原本的亂數去掉 0 後除以 1000 ，用 qnorm 指令轉為來自 N(0,1) 的亂數，做出的 histogram 如第下圖所示，很像一個常態分配，接下來的 acf 與 pacf 圖可以看到有超出藍色的虛線，代表他可能不是來自常態的分配，而且這組亂數並不是一個好的亂數。
+
+```{r echo=FALSE}
+v <- v[v != 0]
+qv <- qnorm(v/1000) # 轉成 Normal(0,1)的值
+hist(qv ,main="Histogram of random number")
+par(mfrow=c(1,2))
+acf(qv ,main="acf")
+pacf(qv, main="pacf") 
+
+```
+
+<br/>
+
+---------------------------------------------------------------------------
+
+## 第三題
+There are several ways for checking the goodness-of-fit for empirical data. In specific, there are a lot of normality tests available in R. Generate a random sample of size 10, 50, and 100 from N(0,1) and t-distribution (with degrees 10 and 20) in R.  You may treat testing random numbers from t-distribution as the power. For a level of significance  = 0.05 test, choose at least four normality tests in R (“nortest” module) to check if this sample is from N(0,1).  Tests used can include the Kolmogorov-Smirnov test and the Cramer-von Mises test.  Note that you need to compare the differences among the tests you choose.
+
+* 首先生成樣本數量為 10,50,100 的分佈(4種分佈)~nrom(0,1) 和 t 分佈(自由度分別為 1,10,20 )，為了看到更大的差異值所以增加自由度為 1 的 t 分佈，對上述的樣本選定 4 種檢定 normal 的方法，其中令 pvalue<0.05 的為 1 ，反之為 0 ，重複以上的做法重複 1000 次，計算 1000 次中拒絕 H0 的次數，即拒絕是 normal 分佈的次數
+
+由結果可以看出：
+
+1. df=10,20 的 t 分佈檢定結果很接近 normal，並且隨著 df 的增加越接近
+2. 對於 df=1 的 t 分佈來說被拒絕的次數很高，並且隨著樣本的增加拒絕次數增加
+3. ks.test 的檢定力相比其他 3 種比較弱
+
+```{r}
+y1 <- function(x){ifelse (ks.test(x,"pnorm")$p.value<0.05,1,0)}
+y2 <- function(x){ifelse(cvm.test(x)$p.value< 0.05 ,1,0)}
+y3 <- function(x){ifelse(lillie.test(x)$p.value< 0.05 ,1,0)}
+y4 <- function(x){ifelse(ad.test(x)$p.value< 0.05 ,1,0)}
+A = NULL;B = NULL;C = NULL
+for (i in 1:1000){
+  t1 = matrix(c(rnorm(10),rt(10,df = 1),rt(10,df = 10),rt(10,df = 20)),nrow=4,byrow=T)
+  t2 = matrix(c(rnorm(50),rt(50,df = 1),rt(50,df = 10),rt(50,df = 20)),nrow=4,byrow=T)
+  t3 = matrix(c(rnorm(100),rt(100,df = 1),rt(100,df = 10),rt(100,df = 20)),nrow=4,byrow=T)
+  a <- matrix(c(apply(t1,1,y1),apply(t1,1,y2),apply(t1,1,y3),apply(t1,1,y4)),ncol=16,byrow=T)
+  b <- matrix(c(apply(t2,1,y1),apply(t2,1,y2),apply(t2,1,y3),apply(t2,1,y4)),ncol=16,byrow=T)
+  c <- matrix(c(apply(t3,1,y1),apply(t3,1,y2),apply(t3,1,y3),apply(t3,1,y4)),ncol=16,byrow=T) 
+  A <- rbind(A,a)
+  B <- rbind(B,b)
+  C <- rbind(C,c)
+}
+rowN = c("ks.test", "cvm.test","lillie.test","ad.test")
+colN = c("nor","t.df=1","t.df=10","t.df=20")
+A = matrix(apply(A,2,sum),nrow=4,byrow=T,dimnames = list(rowN,colN))
+B = matrix(apply(B,2,sum),nrow=4,byrow=T,dimnames = list(rowN,colN))
+C = matrix(apply(C,2,sum),nrow=4,byrow=T,dimnames = list(rowN,colN))
+```
+
+```{r echo=FALSE}
+print("n=10")
+A
+print("n=50")
+B
+print("n=100")
+C
+```
+
+<br/>
+
+---------------------------------------------------------------------------
+
+## 第四題
+(a) Write your own R programs to perform Gap test and Permutation test. Then use this program to test if the uniform random numbers generated from Minitab (or SAS, SPSS, Excel) and R are independent.
+(b) Write a small computer program to perform Up-and-down test. Then use this program and uniform random numbers generated from R to check if the mean and variance for the number of runs derived by Levene and Wolfowitz (1944) are valid.
+
+* Gap test：一組 0~1 之間的亂數，設定 $\alpha , \beta$之後，落在區間內的定義為1，其餘為0，則這組亂數變成由 1,0 組成的數列，而這組數列中 1 之間隔的個數會與幾何分配有關，$P(K=k)=(\beta-\alpha)(1-(\beta-\alpha)^k) , k=0,1,2,...$ 因此由亂數中得到間隔的個數，與落在區間內的總個數乘上 P 為期望個數，就可以去做卡方適合度檢定，得到的 p.value 大的話，代表不能拒絕亂數間獨立的假設。
+
+* gap.test (x,a,b,k) 函數，參數 x=data，$a=\alpha$，$b=\beta$ k= 要將間隔的數切為幾組，例：切7組，間隔數就會有 0,1,2,3,4,5,6 七種
+
+* Permutation test: 一組檔度為 k 的亂數分 n 個排成一列，形成 k/n 列，在每一列裡依大小順序排名，會有 n! 種組合，去計算每一種組合出現的個數與期望出現個數，也就是 $\frac{k/n}{n!}$ 個，去做卡方適合度檢定，由此可以發現，需要足夠的亂數個數，否則 n 不能設太大。
+
+* per.test(x, n) ,x = data, n = 上述的 n ，為每組個數。
+
+* 分別從 Excel 與 R 產生 50 組 1200 個來自 uniform(0,1) 的亂數，利用自己寫的 Gap test 與 Permutation test 對每一組做檢定，以 $\alpha<0.05$ 下，下面的表格代表 50 組裡拒絕的次數，因為在執行的時候可以發現，Permutation test 分幾個一組的 n 對檢定結果有蠻大的影響，故作了 n=3 及 n=4，由結果可以發現兩個 Excel 與 R 產生的亂數都還不錯。
+
+```{r }
+# Gap test
+gap.test <- function(x, a, b, k){
+  x1 <- which(x > a & x < b) #落在指定區間內的位置
+  x2 <- x1[-1] - x1[-length(x1)]-1 # 落在指定區間內的數彼此間隔幾個位置
+  x3 <- as.data.frame(table(x2))
+  t <- c(x3[1:k-1,2], sum(x3[k:dim(x3)[1],2])) 
+  p=NULL
+  m=b-a
+  for(i in 1: (k-1) ){
+    c <- m*(1-m)^(i-1)
+    p <- c(p,c)
+  }
+  p <- c(p , 1-sum(p) )
+  o <- sum(t)*p
+  p.value <- 1-pchisq(sum((t-o)^2/o), df=k-1)
+  return(p.value)
+}
+
+# Permutation test
+per.test <- function(x, n){
+x1 <- matrix(x, ncol = length(x)/n, byrow = F)
+x2 <- apply(x1, 2, rank)
+x3 <- 0
+a <-  (length(x)/n)/factorial(n)
+  f <- function(x){
+    k <- 0
+      for (i in 1:n) {
+        a <- 10^(n-i)*x[i]
+        k <- k + a
+      }
+    return(k)
+  }
+x3 <- apply(x2, 2, f)
+a1 <- table(x3)
+p.value <- 1-pchisq(sum((a1-a)^2/a), df=a-1)
+return(p.value)
+}
+
+K <- matrix(ncol = 2, nrow = 3)
+colnames(K) <- c("Excel", "R")
+row.names(K) <- c("gap.test", "per.test(n=4)", "per.test(n=3)")
+
+## Excel & R random number compare
+rn <- read.csv("rn.csv", sep = ",", header = T)
+r <- matrix(runif(1200*50) , ncol = 50)
+K[1,1] <- sum( apply(rn, 2, function(x) gap.test(x, a=0.2, b=0.4, k=7)) <0.05 )
+K[1,2] <- sum( apply(r, 2, function(x) gap.test(x, a=0.2, b=0.4, k=7)) <0.05 )
+K[2,1] <- sum( apply(rn, 2, function(x) per.test(x, n=4)) < 0.05 )
+K[2,2] <- sum( apply(r, 2, function(x) per.test(x, n=4)) < 0.05 )
+K[3,1] <- sum( apply(rn, 2, function(x) per.test(x, n=3)) < 0.05 )
+K[3,2] <- sum( apply(r, 2, function(x) per.test(x, n=3)) < 0.05 )
+K
+```
+
+<br/>
+
+* Up and down test：一組亂數，定義後面的數字比前面的數字大的話則為 1 ，否則為 0 ，如同第二題的方式，會產生一組數個 run 組成的數列，而 Levene and Wolfowitz (1944) 推導出來 run 的期望值 = (2N-1)/3，變異數 = (16N-29)/90 ， n 代表亂數的長度，所以用下方公式來算 p.value。 $$Z=\frac{U-(2N-1)/3}{\sqrt{(16N-29)/90}} ~ N(0,1)$$
+* 用 R 產生 100 組長度為 1000 的隨機亂數，做 Up and down test ，得出的結果為 $\alpha<0.05$ 下，1000 次裡拒絕的次數。
+
+```{r}
+
+# Up and down test
+run.test <- function(x){
+  n <- length(x)
+  y <- (x[-1] > x[-n]) *1 
+  a <- sum(y[-1] != y[-length(y)] )+ 1 # run個數
+  mu=(2*n-1)/3
+  std=sqrt((16*n-29)/90)
+  return(pnorm(a,mean=mu,sd=std))
+}
+
+r <- matrix(runif(1000*100) , ncol = 100)
+sum( apply(r, 2, run.test) < 0.05)
+
+```
+
+<br/>
+
+---------------------------------------------------------------------------
+
+## 第五題
+$\sum_{i=1}^{12} U_i-6$	can be used to approximate N(0,1) distribution, where $U_i's$ are random sample from U(0,1). 
+
+(a)	Based on $\alpha=0.05$ compare the results of the Chi-square test and the Kolmogorov-Smirnov test, and see if there are any differences. 
+(b) Design two tests of independence (which are not the same as you saw in class) and apply them on the random sample that you generate.
+
+* 利用 U(0,1) 的方法產生 1000 組 1000 個來自趨近常態的數，再對這 1000 組數字分別使用 k.s.test 還有 Chi-square test （非R內有的）檢定是否來自常態分配，分別得到 1000 個 p.value 值，下表為$\alpha=0.01,\alpha=0.05$下拒絕的個數，可以發現 Chi-square test 拒絕的次數較少。
+
+```{r }
+A <- matrix(ncol = 1000, nrow = 2)
+row.names(A) <- c("ks.test", "chi.test")
+p <- c( pnorm(-2),pnorm(-1)-pnorm(-2),pnorm(0)-pnorm(-1),pnorm(1)-pnorm(0),
+        pnorm(2)-pnorm(1), 1-pnorm(2) )
+a <- p*1000
+
+for (i in 1:1000) {
+  y <- matrix(runif(12000), ncol = 1000) 
+  y0 <- apply(y, 2, sum)-6 
+  A[1,i] <- ks.test(y0, "pnorm")$p.value
+  o <- c( sum(y0 < -2),sum (y0 > -2 & y0 < -1 ),sum (y0 > -1 & y0 < 0 ),
+       sum (y0 > 0 & y0 < 1 ),sum (y0 > 1 & y0 < 2 ),sum (y0 > 2) )
+  A[2,i] <- pchisq(sum((a-o)^2/o), df=5)
+}
+
+```
+
+```{r echo=FALSE}
+M <- matrix( ncol = 2, nrow = 2)
+colnames(M) <- c("alpha=0.01", "alpha=0.05")
+row.names(M) <- c("ks.test", "chi.test") 
+M[,1] <- c(sum(A[1, ] < 0.01),sum(A[2,] < 0.01) )
+M[,2] <- c(sum(A[1, ] < 0.05),sum(A[2,] < 0.05) )
+M
+```
+
+* 要用不同的獨立性檢定
+
+* 方法ㄧ：第四題做的 permutation test ，因為這個方法不需要將亂數經過轉換就可以直接做獨立性的檢定，若得出來的 p.value 很小，就會拒絕亂數之間獨立的假設，反之，則為不拒絕亂數之間獨立。
+* 方法二：acf , pacf 來看有沒有週期性的變化，不超過兩個藍色虛線就表示他們是獨立的。
+* 方法三：用 cox.stuart.test ，若 p.value $> \alpha=0.05$ ，則不拒絕亂數互相獨立的假設。
+
+```{r }
+# Method1:permutation test
+y <- matrix(runif(12*1200), ncol = 1200) #ncol代表有幾個隨機變數
+x <- apply(y, 2, sum)-6 #U1~U12相加減6 -> normal
+per.test(x, 3)
+# Method2: pacf acf
+par(mfrow=c(1,2))
+acf(x, main="acf")
+pacf(x, main="pacf")
+# Method3: cox.stuart.test
+library(randtests)
+cox.stuart.test(x,"two.sided")$p.value
+
+```
+
+<br/>
+
+---------------------------------------------------------------------------
+

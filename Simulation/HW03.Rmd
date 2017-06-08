@@ -1,0 +1,505 @@
+---
+title: "統計計算與模擬 Homework03"
+author: "105354003林芃彣 ＆ 105354030陳媚"
+date: "Apr, 18, 2017"
+output: html_document
+---
+
+<br/>
+
+---------------------------------------------------------------------------
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+	warning = FALSE
+  )
+```
+
+```{r echo=FALSE}
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+```
+
+## 第一題
+For uniform (0,1) random variables $U_1, U_2, ...$ define $N=min\{n:\sum_{i=1}^n{U_i>1}\}$ That is, N is the number of random numbers that must be summed to exceed 1.
+
+  a. Estimate E(N) with standard errors by generating 1000, 2000, 5000, 10000, and 100000 values of N, and check if there are any patterns in the estimate and its s.e.
+  
+  b. Compute the density function of N, E(N), and Var(N).
+
+* 首先生成 2 個 uniform(0,1) 亂數，如果相加的和不大於 1 ，繼續加一個 uniform 亂數，直到相加的和超過 1 停止，記錄此時產生的 uniform 亂數的個數，即為題目所指定之 N， space{n:2,3,4,5,...}，重複上述步驟產生 1000,2000,5000,10000,100000 個 N ，則可以分別得到5組N值的集合
+通過 table 統計5 組 N，并畫出其柱狀圖，看其圖形的分佈，可以發現 N 的頻數隨 n 的增加呈現遞減趨勢。
+
+```{r}
+countN <- function(k){
+  N = NULL
+  for (i in 1:k) { 
+    r = NULL
+    repeat{
+      x = runif(1)
+      r = c(r , x)          
+      if (sum(r)>=1) {break} 
+    }
+    a = length(r) 
+    N = c(N , a) 
+  }
+  N
+}
+drawbar <- function(x,i){
+  c= data.frame(countN(x))
+  colnames(c)<-c('freq')
+  sc = data.frame(table(c))
+  p <- ggplot(aes(y=Freq,x=c),data=sc)+geom_bar(stat = "identity",fill=i,width = 0.5)
+  p+ylim(min(sc$Freq, 0)*1.1,max(sc$Freq)*1.1)
+  p+geom_text(aes(label=Freq))
+}
+xlabname = c('N=1000','N=2000','N=5000','N=10000','N=100000')
+n = c(1000,2000,5000,10000,100000)
+bar1 = drawbar(n[1],i='lightblue')+xlab(xlabname[1])
+bar2 = drawbar(n[2],i='lightgreen')+xlab(xlabname[2])
+bar3 = drawbar(n[3],i='salmon')+xlab(xlabname[3])
+bar4 = drawbar(n[4],i='tomato')+xlab(xlabname[4])
+bar5 = drawbar(n[5],i='orchid1')+xlab(xlabname[5])
+grid.arrange(bar1,bar2,bar3,bar4,bar5,ncol=2, nrow=3)
+
+```
+
+* 依題意計算 5 組數據的平均數、變異數、標準差，因為 N 為離散型數據，其對應的 pdf 為點圖(圖中的標示為對應的概率值)。
+
+```{r}
+m_v <- function(x){
+  c= countN(x)
+  N=c(mean(c),var(c),sd(c)/x)
+  N
+ # ggplot(aes(x=c$freq),data=c)+geom_density(aes(x=c$freq))+xlab('pdf')
+}#平均數+變異數
+total = rbind(m_v(n[1]),m_v(n[2]),m_v(n[3]),m_v(n[4]),m_v(n[5]))
+rownames(total)<-xlabname
+colnames(total)<-c('mean','var',"sd")
+total
+
+```
+
+```{r echo=FALSE}
+drawpdf <- function(x,i){
+  c= countN(x)
+  sc = data.frame(table(c))
+  prob = sc$Freq/x
+  f = cbind(sc,prob)
+  p <- ggplot(data=f,aes(x=f$c,y=f$prob))+geom_point(shape = 25,fill = i)
+  p+geom_text(aes(label=prob),hjust=-0.5,size=3)
+} #畫出pdf
+pdf1 = drawpdf(n[1],i='lightblue')+xlab(xlabname[1])
+pdf2 = drawpdf(n[2],i='lightgreen')+xlab(xlabname[2])
+pdf3 = drawpdf(n[3],i='salmon')+xlab(xlabname[3])
+pdf4 = drawpdf(n[4],i='tomato')+xlab(xlabname[4])
+pdf5 = drawpdf(n[5],i='orchid1')+xlab(xlabname[5])
+grid.arrange(pdf1,pdf2,pdf3,pdf4,pdf5,ncol=2, nrow=3)
+
+```
+
+-----------------------------------------------------------------------------
+
+<br/>
+
+## 第二題
+Describe a rejection algorithm for generating normal and logistic distribution, i.e.,$$f(x)=\frac{\exp{[-(x-\alpha)}\beta]}{\beta[1+\exp{[-(x-\alpha)}\beta)]^2]}$$
+
+#### Normal
+
+* 想法：可以由圖形看到在 > 0 的部分， exp(1) 有完全罩住 Normal ，因此可以利用 exp(1) 去做 rejection algorithm ，由於 exp(1) 的範圍為 >0 ，因此主要的想法為先製作出大於零的那一半之後，再產生 Unif(0,1) ，利用這組亂數 >0.5 和 <0.5 的方式去製作出小於零的那塊，所以演算法的過程為：
+
+1. 產生兩組各為 1000 個來自 Unif(0,1) 的亂數 $x,x_1 ~ U(0,1)$
+2. 利用其中一組取 $-\log{x} = exp(1) = Y$
+3. 利用另外一組做拒絕，若$x_1$ $\leq$ $exp{(-(Y-1)^2/2)}$ , then |Z| = Y $
+4. 再產生一組 u ~ Unif(0,1) 的亂數 ，若 $u \leq 0.5, Z = |Z| ; u \ge 0.5, Z = -|Z|$
+
+```{r echo=FALSE}
+x <- seq(0,4, by = 0.1)
+y <- (1/sqrt(2*pi))*exp(-(x^2)/2)
+z <- exp(-x)
+ggplot() +
+  geom_line(aes(x=x, y=z)) +
+  geom_line(aes(x=x, y=y), col="red", linetype=2) +
+  annotate("text", x =2.85, y =0.8, label ="exp(1)",family="STHeiti", colour = "black", size=5)+
+  annotate("text", x =3, y =0.7, label ="N(0,1), x>0",family="STHeiti", colour = "red", size=5)
+
+```
+
+* 產生出來的常態去做直方圖與 ks.test ，還有模擬與實際的比較如下所示。
+
+```{r }
+u <- runif(1000)
+u1 <- runif(1000)
+y1 <- -log(u)
+y1 <- y1[u1 < exp(-((y1-1)^2)/2)]
+u2 <- runif(length(y1))
+z <- c(y1[u2 <= 0.5] ,(-1)*y1[u2 > 0.5])
+```
+
+```{r echo=FALSE}
+hist(z) ; ks.test(z,"pnorm")
+x <- seq(-4,4, by = 0.1)
+y <- (1/sqrt(2*pi))*exp(-(x^2)/2)
+ggplot()+
+  geom_line(aes(x=x, y=y), col="red") +
+  geom_density(aes(z), linetype=3) +
+  theme(plot.title = element_text(hjust = 0.7)) +
+  labs(title ="實際與模擬比較", x = "x", y = "") +
+  theme_grey(base_family="STHeiti") 
+```
+
+#### Logistic Regression
+
+* 想法：與產生 Normal 的方式一樣，我們是使用 logistic distribution $\alpha=0,\beta=1$ 的情況下執行這個方法，其實跟常態長的很像，可以由下圖看到， exp(0.4) 有將 logistic(0,1)
+的範圍都包住（ x>0 時），如果改變 logistic distribution 的 location 或 scale 值，只要將指數做 x 軸的位移或乘數，所以利用 exp(0.4) 函數線生成一邊的羅吉斯， 再用跟上題一樣的方式產生兩邊對稱的分配，根據講義裡對拒絕域的公式判定， c 為兩個函數相除， y 為經由判斷後留下的數值，再去生成兩邊對稱的所謂我們要模擬的羅吉斯分配，下方同樣有模擬與實際的比較。
+
+```{r echo=FALSE}
+curve(dexp(x,0.4), xlim = c(0,10), lty=2)
+curve(dlogis(x), add = T)
+legend(c(6,6),c(0.25,0.32),c("exp(0.4)","logistic"),lty = c(2,1))
+
+```
+
+```{r}
+c <- dlogis(0)/dexp(0,0.4)
+x <- rexp(1000,0.4)
+u <- runif(1000)
+y <- x[u <= dlogis(x)/(c*dexp(x,0.4))]
+u1 <- runif(length(y))
+z <-  c(y[u1 <= 0.5] ,(-1)*y[u1 > 0.5])
+```
+
+```{r echo=FALSE}
+par(family="STXihei")
+plot(density(z), main ="實際與模擬比較" ,xlab="x", ylab="", lty=2, ylim=c(0,0.28))
+curve(dlogis(x), add = T, col="red")
+
+```
+
+-----------------------------------------------------------------------------
+
+<br/>
+
+## 第三題
+(a) Test the generation methods of normal distribution introduced in class, i.e., Box-Muller, Polar, Ratio-of-uniform, and also the random number generators from R. Based on your simulation results, choose the “best” generator. 
+(b) In the class we mentioned it is found by several researchers that
+            $$a(multiplier) = 131$$
+    			 	$$c(increment) = 0 $$
+			 			$$m(modulus) = 2^{35}$$
+would have X  (–3.3,3.6), if plugging congruential generators into the Box-Muller method.  Verify if you would have similar results. 
+
+--------------------------------------------------------------------------------
+
+#### Box-muller
+
+* 依照講義內容的步驟，產生兩組各 1000 個來自 Unif(0,1) 的亂數，經過角度生成與轉換，會產生兩組 1000 個獨立的 Normal(0,1) 隨機亂數。相關係數很低，且 ks.test 檢定結果 p-value 皆很大，表示為不拒絕常態的假設。
+
+```{r}
+x1 <- runif(1000)
+x2 <- runif(1000)
+a <- 2*pi*x1
+e <- -log(x2)
+r <- sqrt(2*e)
+x <- r*cos(a)
+y <- r*sin(a)
+par(mfrow=c(1,2))
+hist(x,main= " ", col = "#9ecae1")
+hist(y, main = "", col = "#deebf7")
+cor(x,y)
+ks.test(x, "pnorm") ; ks.test(y, "pnorm")
+
+```
+
+-----------------------------------------------------------------------------
+
+#### Polar
+
+* 這是一個比較推薦的方法，利用 rejection method 來產生來自常態的隨機亂數，同樣依照講義的步驟，產生兩組各 1000 個來自 Unif(0,1) 的隨機亂數，有限制條件的保留下，產生兩組獨立的 Normal(0,1) 隨機亂數，此時保留的亂數個數會因為每次模擬的情況不同保留的個數不同（<1000 個）。相關係數很低，且 ks.test 檢定結果 p-value 皆很大，表示為不拒絕常態的假設。
+
+```{r}
+v1 <- 2*runif(1000)-1
+v2 <- 2*runif(1000)-1
+v <- v1^2 + v2^2
+sum(v < 1)
+x1 <- v1[v < 1]
+x2 <- v2[v < 1]
+w <- v[v < 1 ]
+c <- sqrt((-2/w)*log(w))
+x <- c*x1
+y <- c*x2
+par(mfrow=c(1,2))
+hist(x, main = "",col = "#9ecae1")
+hist(y, main = "", col = "#deebf7")
+cor(x, y)
+ks.test(x, "pnorm") ; ks.test(y, "pnorm")
+
+```
+
+-----------------------------------------------------------------------------
+
+#### Ratio-of-uniform
+
+* 同樣也是一個較推薦的方法，利用 rejection method 來產生來自常態的隨機亂數，同樣依照講義的步驟，產生兩組各 1000 個來自 Unif(0,1) 的隨機亂數，作轉換和限制條件之下，不同於上述的方法，此方法僅產生一組獨立的 Normal(0,1) 隨機亂數，但相同的，保留的亂數個數會因為每次模擬的情況不同保留的個數不同（<1000 個）。 ks.test 檢定結果 p-value 大，表示為不拒絕常態的假設。
+
+```{r}
+x1 <- runif(1000)
+x2 <- runif(1000)
+v <- sqrt(2/exp(1))*(2*x2-1)
+x <- v/x1
+z <- x^2/4
+x <- x[z <= 0.259/x1+0.35 & z <= -log(x1) ]
+hist(x) ; ks.test(x, "pnorm")
+```
+
+-----------------------------------------------------------------------------
+
+#### compare
+
+* 分別利用三種產生 Normal 隨機亂數的方式，再加上 R 產生的，總共四種方法的比較，表格表示分別執行 1000 次模擬，利用 ks.test 是否為常態的假設下，檢定結果之 p-value < 0.05 的次數。
+
+* 由結果可以看到， 1000 次中，拒絕的次數基本上都在 50 次左右，所以其實四種方法其實產生常態亂數的效果都算不錯。
+
+```{r echo=FALSE}
+Box <- function(k){
+x1 <- runif(k)
+x2 <- runif(k)
+a <- 2*pi*x1
+e <- -log(x2)
+r <- sqrt(2*e)
+x <- r*cos(a)
+y <- r*sin(a)
+return(x)
+}
+Polar <- function(k){
+v1 <- 2*runif(k)-1
+v2 <- 2*runif(k)-1
+v <- v1^2 + v2^2
+sum(v < 1)
+x1 <- v1[v < 1]
+x2 <- v2[v < 1]
+w <- v[v < 1 ]
+c <- sqrt((-2/w)*log(w))
+x <- c*x1
+y <- c*x2
+return(x)
+}
+RU <- function(k){
+x1 <- runif(k)
+x2 <- runif(k)
+v <- sqrt(2/exp(1))*(2*x2-1)
+x <- v/x1
+z <- x^2/4
+x <- x[z <= 0.259/x1+0.35 & z <= -log(x1) ]
+}
+c <- matrix(ncol = 4, nrow = 1)
+colnames(c) <- c("Box-cox", "polar", "Ratio of uniform" ,"R")
+A <- matrix(rep(1000, 1000), ncol = 1000)
+B <- sapply(A, Box) 
+C <- sapply(A, Polar) 
+D <- sapply(A, RU)
+E <- matrix(rnorm(1000*1000), ncol = 1000)
+c[1,1] <- sum(sapply(1:ncol(B),function(x) ks.test(B[,x], "pnorm")$p.value)<0.05)
+c[1,2] <- sum(sapply(C ,function(x) ks.test(x, "pnorm")$p.value)<0.05)
+c[1,3] <- sum(sapply(D ,function(x) ks.test(x, "pnorm")$p.value)<0.05)
+c[1,4] <- sum(sapply(1:ncol(E),function(x) ks.test(E[,x], "pnorm")$p.value)<0.05)
+c
+```
+
+-----------------------------------------------------------------------------
+
+#### (b)
+
+* 利用題目所說的方式，產生來自 Unif(0,1) 的亂數，再帶進 Box-Muller 這個產生常態亂數的方法，很多研究者說，這樣產生的亂數會介在 (-3.3,3.6) 之間，由模擬結果發現，產生的兩組亂數其實沒有像所說的落在指定的範圍。
+
+```{r }
+BM <- function(n){
+v <- vector(length = n)
+x=sample(2^35,1)
+for (i in 1:n) {
+  x <- (131*x) %% 2^35
+  v[i] <- x
+}
+v <- v/(2^35)
+return(v)
+}
+x1 <- BM(10000)
+x2 <- BM(10000)
+a <- 2*pi*x1
+e <- -log(x2)
+r <- sqrt(2*e)
+x <- r*cos(a)
+y <- r*sin(a)
+range(x); range(y)
+
+```
+
+-----------------------------------------------------------------------------
+
+<br/>
+
+## 第四題
+(a)	Simulate the times and amounts of all the claims that would occur in one year. Draw a graph of the total amount of money that the insurance company would have through the year, starting from zero: it should increase smoothly with the premiums, and drop at each claim time.
+(b)	Repeat the simulation 1,000 times, and estimate the following quantities:
+  i. The expected minimum amount of money that the insurance company has.
+  ii. The expected final amount of money that the insurance company would have.
+  
+#### (a)
+* 本題模擬保險公司一年的盈虧情況，其中假定公司收入為 105 百萬/年，每年理賠件數的發生次數服從 poisson 分配(參數100)，每件理賠的金額服從 gamma 分配(參數為2,1/2)，首先將一年的時間分 12 個月，計算每個月發生的理賠件數，並統計每月理賠金額，其中每個月收入設定為 105/12=8.75 百萬，假定每個月的理賠均在月末進行，即月末賠償，繪製出的一年公司按月統計盈虧圖如下圖所示，每個月較高點為理賠前的盈餘，較低點為理賠后的盈餘，因為按月平均都會有同樣趨勢的收入，再依據每個月不同的理賠情況下滑。
+
+```{r}
+N <- function(x){
+  N = c(rpois(x,100/x))
+} #設定一年分為幾期，并計算每期發生的理賠件數
+y <- function(x){
+  M = sum(rgamma(x,2,2))
+} #每期要理賠的金額
+a = sapply(N(12),y)#每個月要理賠金額的集合
+A=NULL
+for (i in 1:12){
+  y = (105/12)*i-sum(a[1:i-1])
+  x = (105/12)*i-sum(a[1:i])
+  A= c(A,y,x)
+} #每個月理賠前+理賠后的金額
+s=c(0,A)
+b = NULL
+for(i in 1:12){
+  c = c(i,i)
+  b = c(b,c)
+} 
+b=c(0,b)
+c = data.frame(cbind(s,b))
+ggplot(data=c,aes(x=b,y=s))+geom_point()+geom_line()+geom_hline(yintercept=0) + scale_x_continuous(breaks=seq(0, 12, 1)) 
+
+```
+
+#### (b)
+ 
+* 為了知悉公司年末的盈餘情況，模擬(a)中計算盈餘的部分 1000 次，得到 1000 次公司年末的最終盈利金額從結果來看：
+1. 公司年末盈利的金額平均為下方 mean(final) （百萬）的值
+2. 畫出 1000 次盈餘的概率分佈圖如下所示，可以發現最高幾率的發生在 x=5 附近
+3. 雖然公司盈餘的平均值大於 0 ，但是從分佈來看公司還是有可能會虧本導致破產(假定公司虧損則需要申請破產)，為了防止公司因為虧損破產，那麼就需要準備一定的備用金
+4. 如圖的垂直線：是在從最小值累積到 2% 的位置，代表公司有 2% 的機率會虧損這個值的百萬數，因此若需要防範這個機率下虧損的情況，則需準備該筆備用金防止破產
+5. 百分比的數字是依據公司認為嚴重的程度做選擇，只是我們先挑選 2% 
+
+```{r echo=FALSE}
+final=NULL
+y <- function(x){
+  M = sum(rgamma(x,2,2))
+}
+for (i in 1:1000){
+  t = sapply(N(12),y)
+  f =105-sum(t)
+  final=c(f,final)
+}
+mean(final) #平均數
+d = data.frame(final)
+qq=data.frame(quantile(final,0.02))
+qq
+colnames(qq)<-c('q')
+p <- ggplot(data=d,aes(x=final))+geom_histogram(aes(y = ..density..),fill="cornsilk", colour="grey60", size=.2)
+p <- p+geom_density(aes(x=final),stat = "density")+geom_vline(xintercept=qq$q)
+p+ scale_x_continuous(breaks=seq(-40, 50, 5))
+```
+
+-----------------------------------------------------------------------------
+
+<br/>
+
+## 第五題
+
+(a) Let X and X1 be i.i.d. r.v.’s and let $Y=\alpha X+(1-\alpha X_1)$ where $0\leq|\alpha|\leq1$. Prove that the correlation coefficient between X and Y is  $\rho_{x,y} =\frac{\alpha}{\sqrt{\alpha^2 + (1-\alpha)^2}}$ . Describe an algorithm for generating a pair of r.v.'s  (X,Y) for which  
+(b) Using the idea in (a), describe an algorithm for generating a random vector  where $(X,Y,Z)^T ~ N(\mu, \sum)$ .
+
+#### (a)
+
+* 按照題目之步驟，產生兩組來自常態的亂數，在隨機選取一個界在 0,1 之間的 $\alpha$ 值，檢驗結果就是 x,y 的相關係數與題目公式計算出來的幾乎相同，大約準確到小數點後第二位。
+
+* 目的是產生一組具有相關係數的亂數，利用 Cholesky Decomposition 的方法，將原本兩組由 R 產生的常態亂數，轉換成我們想要他們之間具有的相關係數，利用 R 內 chol ( ) 的語法，可以直接產生 Cholesky 轉換之後的矩陣，然好再乘上原來的亂數，就可以生成一組具有相關係數的亂數，由模擬結果可以發現，這樣的轉換過後兩組亂數的相關係數會非常接近所指定的相關係數數值，但不會完全相等。
+
+```{r} 
+x=matrix(rnorm(2000), ncol = 1000)
+a <- runif(1)
+y <- a*x[1,]+(1-a)*x[2,]
+cor(x[1,],y)
+a/sqrt(a^2+(1-a)^2)
+
+cholb <- function(x,b){
+A <- matrix(c(1,b,b,1), ncol = 2)
+a=t(chol(A))
+x1 <- a %*% x
+return(cor(t(x1)))
+}
+cor(t(x)) ; cholb(x,0.5)
+```
+
+#### (b)
+
+* 產生 X,Y,Z 的 Multinormal 分配，之間具有相關係數，以同上 (a) 小題的方式，給定要的相關係數 $\rho_{xy}, \rho_{xz}, \rho_{yz}$ 要寫成相關係數矩陣後，帶入 chol ( ) 轉換，再與產生的常態亂數相乘即可得到，此處設定的相關係數值為 $\rho_{xy}=0.5, \rho_{xz}=0.8, \rho_{yz}=0.2$，只是必須要注意的是，在 R 裡使用的 Cholesky 轉換，矩陣當中的數字都必須要是正的，所以想要有負的相關係數可能要自己寫 Cholesky Decomposition。
+
+```{r}
+x=matrix(rnorm(3000), ncol = 1000)
+cor(t(x))
+A <- matrix(c(1,0.5,0.8,0.5,1,0.2,0.8,0.2,1), ncol = 3)
+a <- t(chol(A)) 
+y <- a %*% x
+cor(t(y))
+```
+
+-----------------------------------------------------------------------------
+
+<br/>
+
+## 第六題
+
+(a) Write a function for performing Gauss Elimination on the linear equation $A \hat{x} = \hat{b}$ (and are vectors) in R. Apply your function to find inverse of the matrix $$ A= 
+ \left[
+ \begin{matrix}
+   1 & 2 & -1 & 0 \\
+   0.5 & 1 & 0 & 1 \\
+   0 & 2 & -0.5 & 1 \\
+   1 & -1 & 1.5 & 0 \
+  \end{matrix}
+  \right] \tag{3}
+$$ and compare your results for using 6 and 8 decimal digits. (Hint: Use the command “round(data,dig=6).”)
+(b) You can use the function “solve” to check if your function is correct, where you can assign your own vector $\hat{b}$ .
+
+#### (a)
+
+* 自己寫一個將矩陣運算成反矩陣的 function ，主要概念就是利用高斯消去法的做法，在一個矩陣裡先將第一個元素也就是第一行裡最大的那列調到第一列，然後將其他列第一個元素消為零，再對第二個元素做相同的事，只是是除了已經做好的那一行，以此類推，同時間一開始建構的另一個單位矩陣要跟消去時做同樣的動作，這樣最後轉換好，得到的便是反矩陣。
+
+```{r}
+GE = function(X){
+  if(det(X)==0){break}  ;  y = diag(dim(X)[1])
+  X = cbind(X,y)
+  Y=X
+  for(i in 1:nrow(X)){
+    index = order(Y[,i], decreasing = T)
+    X = X[index,]
+    Y[index[1], ] = Y[index[1], ] - sapply(1:ncol(Y),function(x) max(Y[,x]))
+    Y = Y[index,]
+    X[1,] = X[1,]/X[1,i]
+    for(j in 2:nrow(X)){
+      X[j,] = X[j,]-X[1,]*X[j,i]
+    }
+  }
+  t = {X[,{nrow(X)+1}:ncol(X)]}[sapply(1:nrow(X), function(x) {which(as.numeric(X[,-ncol(X)][,x])==1)}),]
+  return(list("ans"=t))
+}
+X = matrix(c(1, 0.5, 0, 1, 2, 1, 2, -1, -1, 0, -0.5, 1.5, 0, 1, 1, 0), ncol=4)
+GE(X)
+```
+
+#### (b)
+
+* 利用 R 裡可以直接求反矩陣的語法： solve ，可以得到相同的結果。
+
+```{r}
+solve(X)
+```
+
+<br/>
+
+-----------------------------------------------------------------------------

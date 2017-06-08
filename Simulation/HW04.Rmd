@@ -1,0 +1,493 @@
+---
+title: "統計計算與模擬 Homework04"
+author: "105354003林芃彣 ＆ 105354030陳媚"
+date: "May, 08, 2017"
+output: 
+  html_document: 
+    highlight: haddock
+    theme: readable
+---
+
+<br/>
+
+---------------------------------------------------------------------------
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+	warning = FALSE
+  )
+
+library(dplyr)
+library(ggplot2)
+library("e1071")
+```
+
+## 第一題
+
+Given the following data, use one of the orthogonalization methods introduced in class to perform regression analysis, including the parameter estimates and their standard errors. (You may use the functions of matrix computation built in S-Plus and R, but not the function “lm” or “glm”.) Compare your results with those from statistical software, such as SAS, SPSS, and Mintab
+
+* 參考講義內容，利用 sweep operator 的方式解出參數值，輸出的結果為執行完 sweep operator 會得到的矩陣，$\hat{\beta}$ 等同於在無截距項下的迴歸估計值，$\hat{\beta_1}=0.797, \hat{\beta_2}=1.111, \hat{\beta_3}=-0.625$ ，對照利用R lm() 無截距項的迴歸式估計出之結果相同。
+$$ A= 
+ \left[
+ \begin{matrix}
+   -(X'X)^{-1} & \hat{\beta} \\
+   \beta  & RSS \
+  \end{matrix}
+  \right]
+$$
+
+```{r}
+d <- read.table('data.txt',h=T)
+# sweep operator
+d <- as.matrix(d)
+sweep <- function(d){
+  p <- dim(d)[2]-1
+  x <- d[,1:p] 
+  y <- d[,p+1]
+  A <- t(d)%*%d %>%
+  cbind(rbind(diag(p),rep(0,p)))
+  E1 <- diag(p+1) ; E2 = diag(p+1) 
+  E1[1:p,1:p] <- solve(t(x)%*%x)
+  a1 <- E1%*%A
+  E2[p+1,1:p] <- -a1[p+1,1:p]
+  a2 <- E2%*%a1
+  return(a2[,c(5:7,4)])
+}
+sweep(d)
+
+summary(lm(y~0+x1+x2+x3, data=as.data.frame(d)))
+
+```
+
+* 與其他統計軟體做比較：spss做出之結果為包含截距項，所以$\hat{\beta}$會跟 sweep operate做出之結果稍微不同。
+
+<img src="/Users/apple/nicole/R code/classR/plot/spss.png" , width="70%">
+
+-----------------
+
+<br/>
+
+## 第二題
+
+Using simulation to construct critical values of the Mann-Whitney-Wilcoxon test in the case that, where  and  are the number of observations in two populations. (Note: The number of replications shall be at least 10,000.)
+
+* Mann-Whitney-Wilcoxon-test 是想檢定兩個樣本是否有差異它的做法是：
+1. 假設第一個樣本 $x_0$ 有 n 個變數，第二個樣本 $y_0$ 有 m 個變數
+2. 把兩個樣本混合后升序排列，記錄每個觀測值的秩
+3. 取混合后的樣本前 n 個變數為 x1 ，記錄 x1 中變數秩的和 :s1 ，同時記錄剩餘的 m 個樣本為 y1 ,記錄 y1 秩的和：s2
+4. 比較 s1 和 s2 的大小，取 min(s1,s2)
+5. 重複 2-4 步驟 1 萬次，得到 min(s1,s2)的集合
+6. 因為該檢定是單尾檢定，所以取左尾 5% 處的值為檢定值
+          
+* 步驟：1. 取兩組數據均來自於uniform分配，檢定的樣本數均為2~10，分別按照上述描述的做法，得到檢定值
+
+* 結論：得到的表格類似于對稱矩陣，其中數字越大說明越容易拒絕假設
+
+
+```{r}
+t0=matrix(nrow = 9, ncol = 9)
+for (k in 2:10){
+  for (j in 2:10){
+  t2=vector(length = 10000)
+    for(i in 1:10000){
+      x=runif(j+k)
+      a1=sum(rank(x)[1:k])
+      a2=sum(rank(x))-a1
+      t2[i]=min(a1,a2)
+    }
+  t0[(k-1),(j-1)]=quantile(t2, 0.05)
+  }
+}
+
+colnames(t0)<-c('n1=2','n1=3','n1=4','n1=5','n1=6','n1=7','n1=8','n1=9','n1=10')
+rownames(t0)<-c('n2=2','n2=3','n2=4','n2=5','n2=6','n2=7','n2=8','n2=9','n2=10')
+t0
+```
+
+-------------
+
+<br/>
+
+## 第三題
+
+(a) Write a small program to perform the `Permutation test` and test your result on the correlation of DDT vs. eggshell thickness in class, and the following data:
+```
+X 585 1002 472 493 408 690 291
+Y  0.1 0.2 0.5 1.0 1.5 2.0 3.0
+```
+Check your answer with other correlation tests, such as regular Pearson and Spearman correlation coefficients.
+
+(b) Simulate a set of two correlated normal distribution variables, with zero mean and variance 1. Let the correlation coefficient be 0.2 and 0.8. (Use Cholesky!) Then convert the data back to Uniform(0,1) and record only the first decimal number. (亦即只取小數第一位，0至9的整數) Suppose the sample size is 10. Apply the permutation test, Pearson and Spearman correlation coefficients, and records the p-values of these three methods. (10,000 simulation runs)
+
+##### (a)
+
+* 目的：檢定題目所給的兩組變數 X 和 Y 有無相關性 
+
+* 利用 permutation 的做法檢定，想法如下：
+    - 假設兩組變數 X=[x1，x2，....xn],Y=[y1,y2,...yn] ，定義 X 和 Y 的相關係數為：S0=sum(xi*yi),i=y ，即兩組變數一一對應的變數相乘，並求和。當固定 X 變數，改變 Y 變數的順序，重新計算相關係數 S ，當兩組變數高度相關時， S 值相對會越大，反之，負相關的變數的 S 值會越小，沒有相關關係時，排列組合后的 S 值和 S0 相比不會有太大的變動
+    - 如果重複改變Y的順序1萬次，記錄1萬次中S不大於S0的次數，并除以1萬，即可作為檢定的pvalue
+    
+```{r}
+x=c(585,1002,472,493,408,690,291)
+y=c(.1,.2,.5,1,1.5,2.0,3.0)
+a = vector(length = 10000 )
+vs2=sum(x*y)
+for (i in 1:10000){
+  c=sample(7)
+  y1=y[c]
+  vs1=sum(x*y1)
+  a[i]=(vs2>=vs1) * 1
+}
+sum(a)/10000
+
+# 全部排列組合的結果
+toper <- function(t){
+  y1=y[t]
+  vs1=sum(x*y1)
+  a2=(vs2>=vs1) * 1
+}
+
+t2=permutations(7)
+t3=apply(t2,1,toper)
+sum(t3)/factorial(7)
+
+cor(x,y,method = c("pearson"))
+cor(x,y,method = c("spearman"))
+
+```
+
+* 結論：
+1. 在 1 萬次的計算中，排列組合后的 S 值不大於 S0 的概率 ```sum(a)/10000``` ，這個數值很小，說明兩個變數之間存在負相關
+2. 同時對比真實的概率，即 y 共有 7 個變數，也就是存在 5040 種排列組合中，僅有 391 種組合的值不大於原始值（391/5040=0.0775739)，1萬次的模擬結果很接近真實的數值
+3. 對比常見的相關係數，例如：計算 X 和 Y 的 pearson 係數 =-0.5592018， X 和 Y 的 spearman 係數 =-0.5357143，都說明資料存在負相關
+
+
+--------------------------
+
+##### (b)
+
+* 題目描述：在實際工作中，我們收集、處理數據的過程中可能會因為一些原因改變數據的結構或者數值，例如問卷調查中，每個人的評判標準不同那麼對問題的選項選擇其實會有很大的差異，再如問卷選項一般是 1/2/3/4/5 ，如果受訪者的真實選項為 2.5 ，但是因為問卷設計問題就只能選 2 或者 3 ，這樣做出來的問卷調查可能會和真實的情況有所差別，因此我們想通過模擬改變數據的結構，通過將 2 組 normal 數據轉換成 uniform(0,1) ，同時只保留 uniform 數據小數點后一位的方式，來看看轉變后的數據相關性和原始相關性的差異大小，其中原始相關性是設定 2 組 normal 數據的相關性為 0.2 和 0.8 ，分別看相關性的低和高，做這樣轉換后的差異
+
+* 步驟:
+1. 利用 Cholesky 方法產生 2 組相關係數為 0.2 的 normal 亂數樣本 X 和 Y ，樣本個數分別為 10
+2. 利用 pnorm 對 X 和 Y 進行轉換，得到新的 2 組服從 uniform(0,1) 的樣本，并只取小數點后一位(類似于前面描述的問卷選項真實結果2.5變成2或者3)
+3. 結合(a)小題的 permutation 的方法檢定 2 組變數的相關性，也是做 1 萬次的 permutation_test ，由上一小題可知，做 1 萬次的概率值 P 與實際所有排列組合的 P 很接近，同時也有嘗試做所有排列組合下的相關係數的 Pvalue (記為P值)，只是當樣本數很大時，排列組合數量就很多，一一嘗試就很耗時，可以用 sample 的方式，得到與真實值接近的結果,這裡的 P 值越小代表 2 組數據負相關性越強，越大說明越正相關。
+4. 再計算 X1,Y1 的 Pearson and Spearman correlation coefficients 和 pvalue，進行對比
+5. 重複以上步驟 1 萬次，看 3 種方法的對於轉換后的數據相關性的判斷結果
+6. 再重複上述步驟計算相關係數為 0.8 的 normal 數據轉換后數據的相關性，看相關係數有如何的變化 
+ 
+```{r}
+# 生成2組相關係數為0.2的normal
+unif <- function(x){
+  a=pnorm(x)
+  b=floor(a*10)#取小數點後第一位
+  return(b)
+}
+
+t=matrix(ncol = 10000, nrow = 20)
+A <- matrix(c(1,0.2,0.2,1), ncol = 2)
+for (i in 1:10000){
+  x=matrix(rnorm(20), ncol = 10)
+  a=t(chol(A))
+  x1 <- a %*% x
+  t4 = apply(x1,1,unif) 
+  t[,i]=c(t4[,1],t4[,2])
+}
+
+a1=vector(length = 10000);p1=vector(length = 10000)
+p2=vector(length = 10000);s1=vector(length = 10000);s2=vector(length = 10000)
+for (j in 1:10000){
+  x=t[1:10,j]
+  y=t[11:20,j]
+  vs2 <- sum(x*y)
+  a3=vector(length = 1000)
+  for (i in 1:1000){
+    c1=sample(10)
+    y1=y[c1]
+    a3[i]=sum(x*y1)
+  }
+  a1[j]=sum(a3 > vs2)/1000 #pvalue
+  
+  p1[j]=(cor.test(x,y,method = c("pearson"))$p.value < 0.05) * 1 #拒絕次數
+  p2[j]=cor(x,y,method = c("pearson")) #看相關係數的分佈
+
+  
+  s1[j]=(cor.test(x,y,method = c("spearman"))$p.value < 0.05) * 1
+  s2[j]=cor(x,y,method = c("spearman"))
+}
+
+# 生成2組相關係數為0.8的normal
+t=matrix(ncol = 10000, nrow = 20)
+B <- matrix(c(1,0.8,0.8,1), ncol = 2)
+for (i in 1:10000){
+  x=matrix(rnorm(20), ncol = 10)
+  a=t(chol(B))
+  x1 <- a %*% x
+  t4 = apply(x1,1,unif) 
+  t[,i]=c(t4[,1],t4[,2])
+}
+
+b1=vector(length = 10000);p3=vector(length = 10000)
+p4=vector(length = 10000);s3=vector(length = 10000);s4=vector(length = 10000)
+for (j in 1:10000){
+  x=t[1:10,j]
+  y=t[11:20,j]
+  vs2 <- sum(x*y)
+  a3=vector(length = 1000)
+  for (i in 1:1000){
+    c1=sample(10)
+    y1=y[c1]
+    a3[i]=sum(x*y1)
+  }
+  b1[j]=sum(a3>vs2)/1000 #pvalue
+  
+  p3[j]=(cor.test(x,y,method = c("pearson"))$p.value < 0.05) * 1 #拒絕次數
+  p4[j]=cor(x,y,method = c("pearson")) #看相關係數的分佈
+  s3[j]=(cor.test(x,y,method = c("spearman"))$p.value < 0.05) * 1
+  s4[j]=cor(x,y,method = c("spearman"))
+}
+
+```
+
+
+* 結論：
+
+1. 當原始數據相關性 =0.2 時，設定 H0：兩組數據沒有相關性, pearson 與 spearman 相關性檢定的 conf.level = 0.95，檢定1萬次，結果如下表所示：
+    - Permutation 對應到的拒絕次數表示 p-value < 0.05 的次數，都比Pearson 檢定與 Spearman 檢定來的多次
+    - Pearson 檢定與 Spearman 檢定拒絕 H0 的次數(即 p-value<0.05 的次數)，中位數即為相關係數的中位數，接近 0.2
+    - Spearman 的相關係數與 0.2相差較多
+    
+```{r, echo=FALSE}
+M <- matrix(ncol = 3, nrow = 2)
+M[1,]=c(sum(a1 < 0.05) , sum(p1), sum(s1))
+M[2,]=c(median(a1),median(p2), median(s2))
+colnames(M) <- c("Permutation", "Pearson", "Spearman")
+row.names(M) <- c("拒絕次數", "中位數")
+M
+```
+
+
+2. 當原始數據相關性 =0.8 時，設定H0：兩組數據沒有相關性, pearson 與 spearman 相關性檢定的 conf.level = 0.95，檢定1萬次，結果如下表所示：
+    - Permutation 對應到的拒絕次數表示 p-value < 0.05 的次數，都比Pearson 檢定與 Spearman 檢定來的多次
+    - Pearson 檢定與 Spearman 檢定拒絕 H0 的次數(即 p-value<0.05 的次數)，中位數即為相關係數的中位數，接近 0.8
+    - Spearman 的相關係數與 0.8 相差較多
+ 
+
+```{r, echo=FALSE}
+M <- matrix(ncol = 3, nrow = 2)
+M[1,]=c(sum(b1 < 0.05) , sum(p3), sum(s3))
+M[2,]=c(median(b1), median(p4),median(s4))
+colnames(M) <- c("Permutation", "Pearson", "Spearman")
+row.names(M) <- c("拒絕次數", "中位數")
+M 
+```
+
+----------------
+
+<br/>
+
+## 第四題
+
+The block bootstrap can be used in prediction for dependent data. Use the built-in data “sunspot.year” in R, which is can be modeled as an AR(2) model, compare the difference of prediction via block bootstrap and AR(2) model. As a check, you can leave the final 10 observations as “testing” data.
+
+* 針對有時間序列型態的資料，利用 block bootstrap 的方式來做預測，一次取必須要是一個區間，跟一般 bootstrap 不一的地方在於， block bootstrap 是從每個觀測值前後的差值抽取樣本，假設要取的區間個數為 10 ，抽到第 k 個觀察值，則第 k 到第 k+9 個差異值被抽出。
+
+* 題目敘述說明切割原資料，留最後 10 個值作為 testing ， 前面的資料全部作為 training ，所以抽取的區塊大小為 10 ，sunspot.year 總資料筆數為 289 筆，去掉testing 之後剩 279筆 ，再取前後的差值後共有 278 個差值。
+
+* 作法：先將 training data 不重複的狀況切成 10 個 10 個的 block ，因為總共有 278個差值，所以最多可以切成 27 個block，起始點使用隨機 (sample) 的方式選擇， bootstrap 用在從這 27 個 block 以抽出放回的方式，總共取出 1000 個 block 之後，對應每個位置都有 1000 數取中位數，則這 10 個中位數即可以拿來預測新的 10 個數值。
+
+* 預測新數值的方式為： traingdata 的最後一個數字加上第一個差異值為新的一年之預測值，traingdata 加上第一個與第二個差異值為新的第二年之預測值，以此類推，得到新的 10 年的預測數字。
+
+```{r}
+training <- sunspot.year[-c(280:289)]
+testing <- sunspot.year[280:289] #切最後10個觀測值
+
+## AR(2)
+fit<-arima(training,order=c(2,0,0))
+pre <- predict(fit,n.ahead=10)$pre
+
+## block bootstrap 
+diff <- training[-1]-training[-length(training)]
+reptimes <- 1000
+k <- matrix(nrow = 27, ncol = 10)
+a <- sample(1:9,1)
+for (i in 1:27) {
+  k[i,] <- diff[a:(a+9)]
+  a=a+10
+}
+
+m <- matrix(nrow = reptimes, ncol = 10)
+for (i in 1:reptimes) {
+  s <- sample(1:27,1)
+  m[i,] = training[length(training)]+cumsum(k[s,])
+}
+
+me <- apply(m, 2, median)
+u <- apply(m, 2, quantile, probs=0.975)
+low <- apply(m, 2, quantile, probs=0.025)
+
+```
+
+```{r, echo=FALSE}
+## plot
+plot(x=1700:1988, y=sunspot.year, type = "l", xlim = c(1700,1990), xlab = "ye")
+lines(x=1978:1988, y=c(training[length(training)],pre), type = "l", col="red")  
+lines(x=1978:1988, y=c(training[length(training)], me), type = "l", col="blue")
+lines(x=1978:1988, y=c(training[length(training)], u), type = "l", col="green")
+lines(x=1978:1988, y=c(training[length(training)], low), type = "l", col="green")
+legend("top" ,lty=c(1,1), col = c("red", "blue", "green"), c("ARIMA(2,0,0)", "median bootstrap", "95% boostrap"))
+```
+
+-------------
+
+<br/>
+
+## 第五題
+
+This assignment is to test parametric vs. nonparametric bootstrap, i.e., sensitivity of distribution assumption. Suppose 25 observations are drawn from N(0,1) and t(5). The goal is to give a 95% confidence interval for mean via both parametric and nonparametric bootstrap simulations. Assuming that observations are all from normal distribution for the parametric bootstrap. Conduct the 200 bootstrap simulations each case (parametric vs. nonparametric, normal vs. t) for 1,000 times and comment on the results.
+
+* parametric vs. nonparametric bootstrap 這兩個方法的差異在於，parametric bootstrap 是在假設亂數服從某個分配的情況下，從這個分配去做 bootstrap sampling ，而 nonparametric bootstrap 純粹就是從亂數樣本作 bootstrap sampling ，因此題目的意思是想知道這兩個方式對於亂數來自不同分配的情況是不是敏感。
+
+* 各別隨機生成 25 個來自 N(0,1) 跟 t(5) 的亂數，然後利用這兩個方法來得到平均數的 95% 信賴區間，再去看這個亂數的 mean 是不是有落在這 95% 信賴區間之中。
+
+* 由於題目都有規定好 bootstrap 的次數為 200 ，可以得到一個 mean
+ ，然後重複執行 1000 次，所以利用這1000個值就可以去計算 95% 信賴區間，將 parametric & nonparametric bootstrap 這兩個方法分別寫成兩個 function ，然後放入產生的亂數，來看 1000 次的模擬有幾次落在信賴區間當中
+ 
+* 結論：發現其實 parametric vs. nonparametric bootstrap 這兩個方法做出來的結果相差不多。
+ 
+```{r}
+s1 <- rnorm(25)
+s2 <- rt(25,5)
+### parametric bootstrap
+paboots <- function(s){
+p <- vector(length = 1000)
+  for (j in 1:1000) {
+   m <- matrix(rnorm(200*25, mean = mean(s), sd=sd(s)), ncol = 200)
+   v <- apply(m, 2, mean)
+  p[j] = ({mean(s)-1.96*sd(v)} < 0)*({mean(s)+ 1.96*sd(v)} > 0)
+  }
+  sum(p)
+}
+## nonparametric bootstrap
+nonboots <- function(s){
+p <- vector(length = 1000)
+v <- vector(length = 200)
+  for (j in 1:1000) {
+    for (i in 1:200) {
+      ns <- sample(s, 25, replace = T)
+      v[i] <- mean(ns)
+    }
+    p[j] = ({mean(s)-1.96*sd(v)} < 0)*({mean(s)+ 1.96*sd(v)} > 0)
+  }
+sum(p)
+}
+## normal(0,1)
+paboots(s1) ; nonboots(s1)
+## t(5)
+paboots(s2) ; nonboots(s2)
+
+```
+
+---------------
+
+<br/>
+
+## 第六題
+
+To compare teaching, twenty schoolchildren were divided into two groups: ten taught by conventional methods and ten taught by an entirely new approach. The following are the test results:
+```
+Conventional 65 79 90 75 61 85 98 80 97 75
+  New        90 98 73 79 84 81 98 90 83 88
+```
+Are the two teaching methods equivalent in result? You need to use permutation test, (parametric and non-parametric) bootstrap, and parametric test, and then compare their differences in testing.
+
+* 目的：檢定傳統教學和改革教學兩種方法有沒有差別，通過 2 組學生的分數做比較 (X和Y)，如果 2 組分數沒有差別就說明 2 種新的教學方法沒有比傳統教學更優
+
+* 做法：依照目的，假設信賴區間都為 95% ，并通過 4 種方法檢定 H0:兩種教學方法無差異
+
+* 方法一： permutation test
+    - 如果兩組樣本 X(n個數據)和 Y(m個數據)沒有差別的話，那麼混合 X、Y 后，取前 n 個數據作為新的 X1，剩餘數據作為新的 Y1，針對 X1 和 Y1 的 d (d=sum(x1)-sum(y1)) 與原始數據的 d0 (d0=sum(x)-sum(y)) 檢定，若利用混合數據，重複1萬次抽取新的數據組合，那麼計算 d 不大於 d0 的概率，如果概率很小說明不拒絕 H0，如果概率很大說明拒絕 H0
+                
+* 方法二：parameter bootstrap
+    - 假設兩組樣本都服從常態分配，利用已有的 2 組樣本 X0,Y0, 分別計算平均數與變異數，以計算出來的平均數與變異數隨機生成新的常態分配樣本數據 X1，Y1，計算每次 bootstrap 后 2 組樣本的差，計算 1000 次可以得到標準差 se，利用原始樣本的差 +-1.96*se ,看 0 這個數值是否落在區間內，是的話說明兩種教學方法無差異，不在區間內說明兩種教學方法有差異
+   
+* 方法三：nonparameter bootstrap
+    - 假設兩組樣本能代表母體分佈情況，利用 bootstrap 對兩組樣本 X0，Y0 直接進行重複抽取數據，計算每次 bootstrap 后 2 組樣本的差，計算 1000 次可以得到標準差 se ，利用原始樣本的差 +-1.96*se,看 0 這個數值是否落在區間內，是的話說明兩種教學方法無差異，不在區間內說明兩種教學方法有差異
+
+* 方法四：parametric test等價於 t 檢定
+    - 利用 t.test 計算
+
+```{r}
+#方法一:permutation test
+a1=c(65,79,90,75,61,85,98,80,97,75)
+a2=c(90,98,73,79,84,81,98,90,83,88)
+d0=sum(a1)-sum(a2)
+x=c(65,79,90,75,61,85,98,80,97,75,90,98,73,79,84,81,98,90,83,88)
+d=vector(length = 10000)
+for (i in 1:10000){
+  x1=sample(x,20,F)
+  f1=sum(x1[1:10])
+  f2=sum(x1[11:20])
+  d[i]=(f1-f2)
+}
+(sum(d <= d0 | d >= (-d0))/2)/10000
+hist(d)
+#方法二：parameter bootstrap
+m1=mean(a1);v1=var(a1)
+m2=mean(a2);v2=var(a2)
+diff <- mean(a1-a2)
+a0=vector(length = 1000)
+for(j in 1:1000){
+  b=vector(length = 1000)
+  for (i in 1:1000){
+    p1=rnorm(10,m1,v1) # 放裡面放外面結果差不多
+    p2=rnorm(10,m2,v2)
+    b[i]=mean(p1)-mean(p2)
+  }
+  c1=diff-1.96*sd(b)
+  c2=diff+1.96*sd(b)
+  a0[j] = (0 > c1) * (0 < c2) #看1000次模擬包含0的信賴區間次數
+}
+sum(a0)
+
+#方法三：nonparameter bootstrap
+a=vector(length = 1000)
+for(j in 1:1000){
+  b1=vector(length = 1000)
+  for (i in 1:1000){
+    np1=sample(a1,10,T)
+    np2=sample(a2,10,T)
+    b1[i]=mean(np1)-mean(np2)
+  }
+  c1=diff-1.96*sd(b)
+  c2=diff+1.96*sd(b)
+  a[j]=(0 > c1) * (0 < c2)
+}
+sum(a)
+
+#方法四：parametric test
+t.test(a1,a2)$p.value
+
+```
+
+               
+* 結論：
+1. permutation 的結果：利用雙尾檢定，隨機排列組合1萬次的結果中大於或小於原始數據差異的概率=0.11275，大於0.05，因此認為不拒絕 H0 ，即認為 2 種教學方式無差異
+2. bootstrap 無論是有參數還是無參數，信賴區間都包含 0，說明不拒絕 H0
+3. t.test 檢定的 p-value 為 0.22，也是不拒絕 H0
+4. 以上方法都說明兩種教學方法無差異，但是 bootstrap 檢定中，可以發現有參數的 bootstrap 信賴區間範圍很大,無參數的 bootstrap 的信賴區間較小，再嘗試上述 2 種 bootstrap 的方法 1 千次， 2 種方法 1 千次的信賴區間均包含 1，對於這題來說 2 種方法檢定效果一樣，只是信賴區間的範圍有較大的差異
+
+
+```{r}
+# 信賴區間
+c("parameter", quantile(b,0.025), quantile(b,0.975))
+c("nonparameter" , quantile(b1,0.025),quantile(b1,0.975)) 
+```
+
+
+<br/>
+<br/>
+
+-----------------------------------------------------------------------------
+

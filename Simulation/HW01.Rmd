@@ -1,0 +1,341 @@
+---
+title: "統計計算與模擬 Homework01"
+author: "105354003林芃彣 ＆ 105354030陳媚"
+date: "Mar, 14, 2017"
+output: html_document
+---
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+	warning = FALSE
+  )
+
+```
+
+```{r echo=FALSE}
+library("dplyr")
+library("stringi")
+library("stringr")
+library("tm")
+
+```
+
+## 第一題
+(a) Use “scan” to read the data file ‘Draft Lottery’ from web page The Data and Story Library (http://lib.stat.cmu.edu/DASL/) that contains a mixture of character and numeric data. Using the “data.frame” to input the data from the story “Home Field Advantage.” Then, output the data to a text file and an Excel (or csv) file.
+
+* 要用scan 指令將資料讀進來，但發現網址上沒有可以下載資料的地方，所以用網址，然後在後面加上欄位指令的參數，將資料匯進R，約呈現樣子。
+
+
+```{r }
+Lottery <- scan("http://lib.stat.cmu.edu/DASL/Datafiles/DraftLottery.html",
+             skip=31, nlines=397-31 ,what = list(Day=character(0),
+                                                 Month=character(0), 
+                                                 Mo.number=integer(0),
+                                                 Day_of_year=integer(0), 
+                                                 Draft_No.=integer(0))) %>% 
+          as.data.frame
+head(Lottery)
+```
+
+<br/>
+
+* 要匯入Home field advantage 的資料，使用老師上傳的txt檔讀入，但沒有欄名稱，故從網路上複製下來給予欄名稱。
+<br/>
+
+```{r }
+Home <- read.table("home field advantage.txt", na.strings = "")
+colnames(Home) <- 
+  c("year",	"AmerTeam",	"NatlTeam",	"Game1",	"Game2",	"Game3","Game4",	"Game5",	"Game6",	"Game7",	"amer.home",	"amer.away",	"natl.home",	"natl.away")
+```
+
+* 利用下面兩行程式碼存成txt檔，與csv檔，由於有加上欄標籤，所以在col.names 下了 TRUE 的指令，另外也要加上row.names = FALSE 否則第一個直欄會出現數字排序。
+<br/>
+
+```{r eval=FALSE}
+write.table(Home, "Homefield.txt", col.names = TRUE, fileEncoding = "utf-8", row.names = FALSE)
+write.csv( Home, "home field advantage.csv", row.names = FALSE)
+
+```
+
+------------------------------------------------------------------------------------
+
+(b) Change the missing values ‘¥’ to ‘NA.’ Then, draw a boxplot to describe the variables of home winning percentage and away winning percentage for the American League and for the National League. 
+
+* 由於老師的檔案並沒有“¥”字號，是為0，故將0的位置改為'NA'，繪製盒型圖，可以看出主場勝率平均都比客場勝率高，而美聯客場勝率有兩個離群值，國聯主場勝率有一個較高的離群值。
+
+<br/>
+
+```{r }
+Home[Home == 0] = NA
+boxplot(Home[,11:14]) 
+
+```
+
+------------------------------------------------------------------------------------
+
+(c) It is believed that the team with higher home winning percentage has better chance of winning the World Series. Check whether this result! (Hint: You can use the function “is.na” to remove the “NA” observations.)
+
+* 題目敘述為：大家認為有較高的主場勝率會有較高的機會贏的世界大賽的冠軍，我們要來看看這樣的敘述是否正確，所以先想辦法確認是美聯或國聯獲勝，在看美聯與國聯誰有較高的主場勝率，因此要計算誰是冠軍，其中1,3代表美聯該局獲勝，2,4表示國聯該局獲勝，所以利用加總1,3出現個數，與2,4出現個數比較，較高者為當場比賽獲勝隊伍以下表示為A：美聯隊伍獲勝；N：國聯隊伍獲勝。另外主場勝率誰高，則是利用比較兩隊的主場勝率比，以下定義為 0:美聯主場勝率大於國聯主場勝率；1:美聯主場勝率小於國聯主場勝率（國聯主場勝率高）；2:美聯主場勝率等於國聯主場勝率，拿他們做 table 比較，可以看到結果顯示，美聯主場勝率高的總共有27+19=41場而獲勝的有27場，佔0.6585，國聯主場勝率高的總共有13+9=22場而獲勝的有9場，佔0.409，感覺上並不一定有較高的主場勝率就有較大的機會成為世界大賽的冠軍。
+
+<br/>
+
+```{r}
+Home[is.na(Home)] =9 
+H <- Home[c(4:10)]
+i <- c(1:71) 
+a1 <- rowSums(H[i,]==1)+rowSums(H[i,]==3)
+a2 <- rowSums(H[i,]==2)+rowSums(H[i,]==4)
+b1 <- ifelse(Home$amer.home>Home$natl.home, 0, 1)
+b1[Home$amer.home==Home$natl.home]=2
+b2 <- ifelse(a1>a2, "A","N")
+table(b1, b2)
+
+```
+
+------------------------------------------------------------------------------------
+
+(d) Draw scatterplots for the American League and the National League separately, using the home winning percentage as x-axis and the away winning percentage as y-axis. Also, use the function “identify” to mark unusual observations and give your comments on these observations.
+
+* 分美聯與國聯，分別畫出他們的主場勝率與客場勝率的散步圖，第一張圖為美聯，覺得數據有點像集中在中間那條線，所以在上下找了三個認為比較遠的點，分別是第6、49、54筆資料。第二張圖為國聯，比第一張圖更為分散的情況，但出的點為靠近右邊，有特別高的主場勝率之資料，分別是第18、40、51筆。
+
+<br/>
+
+```{r eval=FALSE}
+plot(Home$amer.home,Home$natl.away)
+identify(Home$amer.home,Home$amer.away, n=3) 
+plot(Home$natl.home,Home$natl.away)
+identify(Home$amer.home,Home$amer.away, n=3) 
+
+```
+
+<img src="/Users/apple/nicole/nccu/統計計算與模擬/統模/plot/America.png" , width="70%">
+
+<img src="/Users/apple/nicole/nccu/統計計算與模擬/統模/plot/National.png" , width="70%">
+
+------------------------------------------------------------------------------------
+
+## 第二題
+(a) Use the commands “date” and “cat” to print the time you do this homework, e.g., 
+Today’s date is: Mon Mar 07 2017
+The time now is: 09:13:00 
+You need to write down the commands.
+
+* 指令’date’取得時間為character，用指令’substr’將取得的時間分割為2部分【（年/月/日/週）+（時/分/秒）】，之後再用指令’cat’拼接成題目要求的形式
+* 注意：cat()為列印輸出指令，並不能存取成物件
+
+<br/>
+
+```{r}
+A <- as.character(date())
+AA <- cat(substr(A, 1,10), substr(A,21,24))
+cat("Today's date is:", substr(A, 1,10)) %>% cat(substr(A, 21,24))
+cat("The time now is:", substr(A, 12,19))
+
+```
+
+
+------------------------------------------------------------------------------------
+
+(b) Try the following commands in R and explain the outputs:
+(today <- Sys.Date())
+format(today, "%d %b %Y")  # with month as a word
+(tenweeks <- seq(today, length.out=10, by="1 week")) # next ten weeks
+weekdays(today)
+months(tenweeks)
+as.Date(.leap.seconds)
+
+```{r}
+(today <- Sys.Date())
+format(today, "%d %b %Y")
+(tenweeks <- seq(today, length.out=10, by="1 week"))
+weekdays(today)
+months(tenweeks)
+as.Date(.leap.seconds)
+
+```
+* 先定義today變量是系統當日日期，後格式化today 形式為：日月年
+* 利用today生成一個新變量tenweeks ：長度10的向量，間隔為1週的時間
+* 查看today對應的星期：今天星期幾
+* 查看tenweeks 對應的月份
+* 查看.leap.seconds（指閏秒）所在的時間(年月日)
+* weekdays(), months(), quarters(), julian() 等函式, 可以取的日期類別物件的訊息.
+
+<br/>
+
+------------------------------------------------------------------------------------
+
+## 第三題
+(a) Plot the line graph of the following function on the interval [0, 6]:
+$$f(x)=x^{2}-2x+3,  x<=3 ; x+2\exp{(x-3)}+1, x<3$$
+
+(b) Use the command “abline” to plot the tangent lines at the minimum and x=5.
+
+* 需要在區間中將2段函數拼接，可以利用curve指令中的add=T，還需注意將2個函數的X,Y的範圍設置成一樣
+* 題目要求在最低點和 x=5 兩處畫切線，利用 abline(a,b) 指令可在圖中加上一條 y=a+bx 的直線，因此要分別找到兩個位置切線的斜率與截距項，最小值：利用 optimize 指令找到兩個函數最小值，再比較得到區間最小值，由(a)小題畫出的圖可知最小值的斜率為0。
+x=5的位置，直接代入對應函數得到切點的坐標值 (x,y) ，利用函數求得斜率 k ，則可推出截距像項 y-5k ，即可利用 abline() 畫線。
+
+<br/>
+
+```{r}
+y1 <- function(x){x*x-2*x+3}
+y2 <- function(x){x+2*exp(x-3)+1}
+curve(x*x-2*x+3,0,3,xlim=c(0,6),ylim=c(0,50),col="red", lwd=2, ylab = "")
+curve(x+2*exp(x-3)+1,3,6,add=T,xlim=c(0,6),ylim=c(0,50),col="blue", lwd=2, ylab = "")
+y3 <-  D(expression(x+2*exp(x-3)+1),"x")  
+x = 5
+k = eval(D(expression(x+2*exp(x-3)+1),'x'))
+y = y2(5)
+abline(y-k*5,k, col="6")
+m1 = optimize(y1,c(0,3))$minimum  
+m2 = optimize(y2,c(3,6))$minimum
+m = min(y1(m1),y2(m2))
+abline(h=m,col="6")
+
+```
+
+
+------------------------------------------------------------------------------------
+
+## 第四題
+Use the function “rnorm” to create 100 random numbers from normal distribution with mean and variance equal your birth month and birth date. 
+Next, compute sample averages and variances of these observations, and averages of largest 40 observations. Continue this procedure 5,000 times and use the function “apply” to compute the sample averages and variances without using loop.
+ Also, test if the averages of each set of 100 observations are equal to your birth month. (Bonus: Store the p-values of testing if they are from U(0,1)!)
+
+* 利用指令’rnorm’隨機生成常態分佈函數（平均數=生日月份，變異數=生日日期），直接利用 mean() var() 指令求期望值變異數，要計算前 40 個大的觀測值的平均，利用 sort 將觀測值從小到大排序，再取最後40個數字，即可計算平均。
+
+* 要重複執行 5000 次，每次皆為 100 個隨機數字，並利用 apply 計算樣本平均數與變異數，還有檢定平均數是否等於 3 (生日月份)，首先利用 matrix 產生 5000 x 100 的常態亂數，分 100 欄，所以會有 5000 個橫列，接著就可以直接利用 apply， 第二個參數為 2 ，代表以每列做，求檢定的 p-value 則是先寫給她一個函數叫 y() 讓他做雙尾且平均為 3 的檢定並取出 p-value 值，再利用 apply 對每列執行這個函數，接著題目要求驗證得到的這 5000 個 p-value 是否符合均勻分配，利用 ks.test 檢定得到的結果 p-value 是很大的，所以應為符合均勻分配。
+
+<br/>
+
+```{r}
+y <- rnorm(100,3,sqrt(31))
+mean(y)
+var(y)
+z <- mean(sort(y)[61:100])
+
+
+n=5000*100
+data <- matrix(rnorm(n,3,sqrt(31)), ncol=100)
+head(apply(data, 2, mean))
+head(apply(data, 2, var))
+y <- function(x){
+  t.test(x,alternative = "two.sided", mu = 3)$p.value
+}
+pvalue <- apply(data,2,y) 
+head(pvalue)
+ks.test(pvalue, "punif")
+
+```
+
+------------------------------------------------------------------------------------
+
+## 第五題
+(a) Plot sin(x) against x, using 200 values of x between  and , but do not plot any axes yet (use parameter axes=F in the call to plot.) 
+Add a y-axis passing through the origin and horizontal labels. 
+Add an x-axis with tick-marks from  $-\pi$ to $\pi$ increments of $\pi/4$, twice the usual length.
+
+* 利用seq等距離取範圍在(-pi,pi)中的200個數值，並使之對應函數sin(x)繪圖，設置 plot 中的參數 axes = FALSE 讓圖中不顯示 x、y 軸利用 abline(h=0, v=0) 增加通過原點的x y軸，
+再利用 text 的方式在每間隔 4/pi 的位置，都標上對應的數字。
+
+<br/>
+
+```{r}
+x <- seq(-pi,pi, length=200)
+y <- sin(x)
+plot(x,y, axes = FALSE, type = "l", lwd=1.5, ylim = c(-1,1))
+abline(h=0, v=0,lty=1.5 )
+xlo <- seq(-pi,pi, pi/4)
+xlabel <- c(expression(-pi), expression(frac(-3*pi,4)),expression(frac(-pi,2)),
+            expression(frac(pi,4)),0,expression(frac(pi,4)),expression(frac(pi,2)),
+            expression(frac(3*pi,4)), expression(pi))
+text(x=xlo,y=rep(-0.05,9),xlabel)
+```
+
+------------------------------------------------------------------------------------
+
+(b) Similar to (a), but plot the functions sin(x) and cos(x) in the same plot, using the function matplot (i.e., matrix plot, or multiple plots). Also, use the function “legend” to explain the meaning of each line.
+
+*類似(a)，生成 (-pi,pi) 2x100 的 matrix，代入對應的sin(x)、cos(x)，利用 matplot 繪圖，再利用 legend 標示出方形圖示的為 sin 三角形圖示的為 cos 。
+
+<br/>
+
+```{r}
+x <- matrix(NA,100,2)
+x[,] <- seq(-pi,pi, length=100)
+y <- cbind(sin(x[,1]), cos(x[,2]))
+matplot(x,y, pch=c(5,6), col = c(3,4), xlim = c(-pi, pi), axes=FALSE)
+legend(-3, 0.8, c("sin","cos" ), pch = c(5,6),  col = c(3,4), bty = "n", cex = 1.2)
+axis(1,xlo, xlabel ,tick = T)
+
+```
+
+------------------------------------------------------------------------------------
+
+## 第六題
+Use the command “readLine()” to input the text file on my website, as shown in the notes.
+
+(a)	Calculate the number of words and the number of different words in the file.
+
+* 利用 readLine() 函數將文字資料一行一行讀入，接著因為要算字數，所以想要先將整篇文章合併在一起，也方便後面操作時要刪的東西不一樣，可以不用合併很多次，合併之後，由於要算字數以及有多少個不同的字，所以將標點符號、數字、英文、還有空格刪除，特別的是空格的刪除是利用尋找 "\ \ s" ，通通移除之後就剩下全部都是文字的一個字串，直接計算字數得到 10340 個字，而不同的字有 1280 個。
+
+<br/>
+
+```{r}
+hw6 <- readLines("水滸傳第01回.txt") %>% stri_encode("big-5" ,"utf-8") 
+r <- length(hw6)
+hw63 <- paste(hw6[1:r], collapse = "")
+hwt <-  removePunctuation(hw63) %>% removeNumbers() %>% gsub("\\s","",.) %>% gsub("[a-z]","",.)#刪空白 \\s
+nchar(hwt)
+
+length(table(strsplit(hwt, split = "")))
+n_distinct(strsplit(hwt, split = "")[[1]])
+
+```
+
+------------------------------------------------------------------------------------
+
+(b)	Find the top ten two-word phrases and calculate their numbers of occurrences.
+
+* 要對文章進行斷字，要刪掉的部分與上一題有點不同，上一題刪掉的數字此題做保留，所以總共是刪除標點符號、空白與英文，利用for 迴圈做斷字，斷成兩個字兩個字一組後，利用 table 的方式，得到每兩個詞組的總共次數，前十個出現次數最高的詞分別顯示如下：
+
+<br/>
+
+```{r}
+hw62 <-  removePunctuation(hw63) %>% gsub("\\s","",.) %>% gsub("[a-z]","",.)
+
+word <- NULL
+n2 <- nchar(hw62)
+n3=n2-1
+for (i in 1:n3) {
+  word =c(word, substr(hw62, i, i+1))
+  
+}
+wordtable <- table(word) %>% sort( decreasing = TRUE)
+wordtable[1:10]
+```
+
+------------------------------------------------------------------------------------
+
+(c)	Identify the locations of top three phrases and comment on their distribution. (Note: Check if they are normally or uniformly distributed.)
+
+* 要找到前三個最常出現的詞在文章出現的位置，想法是將一整篇合併起來的文章想成一個 0 到 10342 的數段，而切字時每個字都有當到詞組第一個字的機會，也就是說，要定義詞組的位置，去找到拆解後每兩個字的詞組形成的字串他所在的位置也就是整篇文章中對應的位置，舉例而言：當文章為 1234，而使用斷詞成兩個兩個後會變成："12", "23", "34"，所以如果我們要找 "23" 出現的位置是在斷詞後的第二個，呼應到在文章的第二個位置，因此利用這樣的方式找出"史進","王進", "高俅"在文章中的所有位置，利用ks.test做常態檢定，查看結果發現 p-value 非常小，應為拒絕常態的假設，有不符合常態的現象，另外再用 ks.test 做均勻分配檢定，給的參數是文章字數從 1~10342 （前面算出的10340再加兩個數字），因此認為這三個詞在文章中出現的位置應比較符合均勻分布的樣子。
+
+<br/>
+
+```{r}
+loca <- which(word %in% c("史進","王進", "高俅"))
+ks.test(loca, "pnorm", mean(loca),var(loca)) 
+ks.test(loca, "punif",1, 10342)
+
+```
+
+
+<br/>
+
+---------------------------------------------------------------------------
+
