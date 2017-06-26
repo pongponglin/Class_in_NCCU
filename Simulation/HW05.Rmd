@@ -1,0 +1,617 @@
+---
+title: "統計計算與模擬 Homework05"
+author: "105354003林芃彣 ＆ 105354030陳媚"
+date: "June, 13, 2017"
+output: 
+  html_document: 
+    highlight: haddock
+    theme: readable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+	warning = FALSE
+  )
+library(dplyr)
+library(gss)
+```
+
+<br/>
+
+<br/>
+
+## 第一題
+
+Try at least three different methods to find the estimates of B and C for the Gompertz model,  using the Taiwan data in 2016. You may count “nlminb”, “nls” or “opt” as one of the method (for replacing Newton’s method). Also, similar to what we saw in the class, discuss the influence of starting points to the number of iterations. You may choose the male data or female data. (Bonus: Compare the results of different counties.)
+
+- 目標：利用Gompertz model 計算各年齡對應的死亡率，利用台灣各年齡人口數及死亡數估計 Gompertz model 中的參數 B 和 C ，并比較不同方法對於權重的敏感度、迭代起始值及次數的差異
+
+- 做法：
+- WLS:$$\min_{B C} \sum_{x}(w_x(log(-log(p_x)-\alpha-\beta{x}))^2)$$ 
+- NM :$$\min_{B C} \sum_{x}w_x(P_x-e^{-BC^x(c-1)/log(c)})^2$$
+- MLE:$$\min_{B C} \sum_{x}[(n_x-d_x)BC^x(c-1)/log(c)-d_xlog(1-e^{-BC^x(c-1)/log(c)})$$
+      
+    1. 採用 3 種方法 min 目標函數，分別是 WLS (最小平方加權)、 MLE (最大概似估計)、 NM (非線性估計)， MLE 及 NM 利用 optim 函數解參數,3種方法的推導后公式如上:
+   
+    2. 參考來源：Yue, C. J. (2002), “Oldest-Old Mortality Rates and the Gompertz Law: ATheoretical and Empirical Study Based on Four Countries”, Journal of Population Studies (TSSCI), vol. 24, 33-57.
+    
+    3. 首先選擇 2016 台北的男性人口數及死亡人數，依據上課方法將年齡按 5 為單位分為 21 組，如 0-4 歲， 5-9 歲... 95-99 歲，大於 100 歲的單獨一組，其中各年齡層數據以其中位數為代表
+    
+    4. 分別對 3 種方法對應的公式求解參數 B/C ，在 WLS 的計算結果中可知參數B的範圍大約在 0.17 左右，參數 C 的範圍在 1 左右，因此利用 optim 函數求解 NM、MLE 方法中的參數時， B/C 參數的起始計算位置設為 (0.05,0.95) 同時選取權重為 1 時，NM和MLE迭代起始位置選為 (0.5,0.5)，對比差異
+    
+    5. 同時對 WLS、NM 設置 3 種權重，分別為：1、sqrt(n)、log(n)，想要對比看看權重對結果的影響
+    
+    6. 後續再計算 NM、MLE 的迭代次數差異， optim 函數起始位置設置 10 組：從 (0.02,0.9) 起分別以 0.01 遞增
+
+- 結論：
+    1. 參數估計的 3 種方法：對於參數 C 的估計差異不大，其中 WLS 對於權重比較不敏感，而 NM 設置不同權重時，參數 C 的估計結果差異較大參數 B 的估計中，WLS 估計結果小於 NM ，WLS 估計值在 0.017 附近，NM 在 0.028 附近，而 MLE 的估計值相較於另外 2 種方法偏小很多
+    
+    2. 迭代起始位置的比較：當改變 optim 函數的起始位置為 (0.5,0.9) 時，NM 對於 2 個參數的估計結果差異都較大，MLE 對於參數 C 的估計較為準確，參數 B 的估計結果差異依舊較大
+    
+    3. 迭代次數的比較：當 NM、MLE 的起始位置一樣時，NM 迭代次數相比 MLE 少，在 20-30 次之間，而 MLE 的迭代次數在 100-180 之間，個別達到 257 次，迭代次數較多
+
+
+```{r}
+pop<- read.csv('population1.csv',header=F)  #人口
+death<- read.csv('death1.csv',header = F)  #死亡人數
+male.p<-unlist(c(apply(matrix(unlist(pop[-1]),nrow=20,byrow=TRUE),1,sum),pop[101]))  #分組
+male.d<-unlist(c(apply(matrix(unlist(death[-1]),nrow=20,byrow=TRUE),1,sum),death[101])) #分組
+n<- male.p+male.d  #總人口
+p<- 1-male.d/n  #生存率
+x<- -3+5*(1:21)  #取中位數
+```
+
+----------
+
+#### 方法一：wls
+
+```{r}
+mywls<-function(weights){
+  wls<-lm(log(-log(p))~x,weights = weights)
+  cwls<-exp(wls[[1]][2])  #function中的beta
+  bwls<-exp(wls[[1]][1]-log(cwls-1)-log(log(cwls)))
+  cbind(bwls,cwls)
+}
+wls<-rbind(mywls(rep(1,21)),mywls(sqrt(n)),mywls(log(n)))
+```
+
+----------
+
+#### 方法二：nm
+
+```{r}
+nmf1<-function(y){
+  b<-y[2]
+  c<-y[1]
+  w<-rep(1,21)
+  tot<-NULL
+  for(i in 1:length(p))
+    tot<-sum(tot,w[i]*(p[i]-exp((-b*c^x[i])*(c-1)/log(c)))^2)
+  tot
+}
+nm1<-optim(c(0.05,0.99),nmf1)$par
+nm4<-optim(c(0.5,0.9),nmf1)$par
+
+nmf2<-function(y){
+  b<-y[2]
+  c<-y[1]
+  w<-sqrt(n)
+  tot<-NULL
+  for(i in 1:length(p))
+    tot<-sum(tot,w[i]*(p[i]-exp((-b*c^x[i])*(c-1)/log(c)))^2)
+  tot
+}
+nm2<-optim(c(0.05,0.99),nmf2)$par
+
+nmf3<-function(y){
+  b<-y[2]
+  c<-y[1]
+  w<-n
+  tot<-NULL
+  for(i in 1:length(p))
+    tot<-sum(tot,w[i]*(p[i]-exp((-b*c^x[i])*(c-1)/log(c)))^2)
+  tot
+}
+nm3<-optim(c(0.05,0.99),nmf3)$par
+nm<-rbind(nm1,nm2,nm3)
+```
+
+----------
+
+#### 方法三：mle
+
+```{r}
+mlef<-function(y){
+  b<-y[1]
+  c<-y[2]
+  tot<-NULL
+  for(i in 1:length(p))
+    tot<-sum(tot,((n[i]-male.d[i])*b*c^x[i]*(c-1)/log(c)-male.d[i]*log(1-exp((-b*c^x[i])*(c-1)/log(c)))))
+  tot
+}
+mle<-optim(c(0.05,0.99),mlef)$par
+mle1<-optim(c(0.5,0.9),mlef)$par
+```
+
+----------
+
+#### 結果1：對比參數BC的估計結果 
+
+```{r}
+result1<-rbind(wls,nm,mle)
+colnames(result1)=c('參數B','參數C')
+rownames(result1)=c('WLS-1','WLS-sqrt(n)','WLS-n','NM-1','NM-sqrt(n)','NM-log(n)','MLE')
+result1
+```
+
+----------
+
+#### 結果2：對比NM MLE的起始位置選取差異
+
+```{r}
+result2<-rbind(nm4,mle1)
+colnames(result2)=c('參數B','參數C')
+rownames(result2)=c('nm','mle')
+result2
+```
+
+----------
+
+#### 迭代次數的比較
+
+```{r}
+nm.iter<-matrix(nrow=10,ncol=10)
+for(i in 1:10){
+  for(j in 1:10){
+    nm.iter[i,j]<-optim(c(0.019+0.01*i,0.89+0.01*j),nmf1)$counts[1]
+  }
+}
+nm.iter
+
+mle.iter<-matrix(nrow=10,ncol=10)
+for(i in 1:10){
+  for(j in 1:10){
+    mle.iter[i,j]<-optim(c(0.019+0.01*i,0.89+0.01*j),mlef)$counts[1]
+  }
+}
+mle.iter
+```
+
+-----------------
+
+<br/>
+
+## 第二題
+
+Evaluate the CDF of standard normal distribution $\Phi(x)$ using the method of Important Sampling and other Variance Reduction Methods (at least two different methods). Consider x = 6, 5, 4, 3.5, 3, 2.5, 2.
+
+- 目標：計算標準常態的累積機率，并利用3種方法縮減變異數 
+- 做法：
+    1. 利用蒙地卡羅方法計算 Xi 服從標準常態下的累積機率，i=1,2...7 ，同時與利用 pnorm 函數得到的機率值作為標準進行對比，其做法如下:從已知的標準常態分配中抽出 10000 個值，并計算抽出的值中小於 Xi 的個數，記為 a1 ，則 a1/10000 就是 Xi 的累積積累值，重複上述步驟 1000 次，計算 1000 個 a1 的平均數及變異數
+    
+    2. 縮減變異數
+        a. Importance Sampling：想要用相似的分配 f1 逼近目標分配 f2 (標準常態)，計算其累計機率值，令 f1 為也常態分配，平均數=目標值 (-6,-5,-4,-3.5,-3,-2.5,-2) ,變異數=1，從 f1、f2 分別抽取 1 萬個觀測值，計算f1中小於平均數的觀測值與 f2 的比值的機率 t1 ，重複 1 千次，計算 t1 的平均數及變異數
+        
+        b. Antithetic Variate：找一個和目標值完全負相關的數，利用 rnorm 生成 1 萬的值 Xi,這裡取 yi=-xi,(x+y)/2 是原本目標值的不偏估計，且兩者負相關，因此達到縮減變異數的目的
+        
+        c. Stratified Sampling：有點類似分層抽樣，先將 CDF 範圍 unif[0,1] 均等分為 5 份，每個區間抽取相同數量的樣本 xi ,設 x=(1/xi)-1，將 x 代入標準常態的 pdf 計算機率,重複 1000 次計算其平均數
+
+- 結果：整體而言，ImportanceSampling 估計的累積機率最為準確，特別在 x 越小時和其他方法相比估計仍然較為準確， Antithetic Variate 和蒙地卡羅方法估計效果稍遜，且X越小估計效果越差， Stratified
+Sampling 估計效果最不理想，差異最大，可能是因為類似分層抽樣，每個區間都抽取了相同的樣本數有影響
+
+
+#### stand value
+
+```{r}
+x<-c(-6,-5,-4,-3.5,-3,-2.5,-2)
+stand<-pnorm(x)
+```
+
+#### 蒙地卡羅
+
+```{r}
+mc.f<-function(n,value){
+  t0=NULL
+  for(i in 1:n){
+    x=rnorm(10000)
+    a1=sum(x<=value)/10000
+    t0=c(t0,a1)
+  }
+  out=rbind(mean(t0),var(t0))
+  rownames(out)=c('estimate','variance')
+  out
+}
+mc=cbind(mc.f(1000,-6),mc.f(1000,-5),mc.f(1000,-4),mc.f(1000,-3.5),mc.f(1000,-3),mc.f(1000,-2.5),mc.f(1000,-2))
+
+```
+
+#### importance sampling
+
+```{r}
+imposam.f<-function(n,value){
+  t1=NULL
+  for(i in 1:n){
+    x=rnorm(10000,value,1)
+    zpdf=function(x){1/sqrt(2*pi)*exp(-(x^2)/2)}
+    g=function(x){1/sqrt(2*pi)*exp(-(x-value)^2/2)}
+    h=ifelse(x<value,1,0)
+    fg=h*zpdf(x)/g(x)   
+    a1=sum(fg)/10000
+    t1=c(t1,a1)
+  }
+  out=rbind(mean(t1),var(t1))
+  rownames(out)=c('estimate','variance')
+  out
+}
+imposam=cbind(imposam.f(1000,-6),imposam.f(1000,-5),imposam.f(1000,-4),imposam.f(1000,-3.5),imposam.f(1000,-3),imposam.f(1000,-2.5),imposam.f(1000,-2))
+
+```
+
+#### antithetic variate
+
+```{r}
+anti.f<-function(n,value){
+  t2=NULL
+  for(i in 1:n){
+    x1=rnorm(10000)
+    x2=-x1
+    a=(sum(x1<=value)+sum(x2<=value))/2
+    a1=a/10000
+    t2=c(t2,a1)
+  }
+  out=rbind(mean(t2),var(t2))
+  rownames(out)=c('estimate','variance')
+  out
+}
+anti=cbind(anti.f(1000,-6),anti.f(1000,-5),anti.f(1000,-4),anti.f(1000,-3.5),anti.f(1000,-3),anti.f(1000,-2.5),anti.f(1000,-2))
+
+```
+
+#### stratified sampling
+
+```{r}
+stram.f<-function(n,value){
+  t4=NULL
+  for(i in 1:n){
+    x=c(runif(2000,0,0.2),runif(2000,0.2,0.4),runif(2000,0.4,0.6),runif(2000,0.6,0.8),runif(2000,0.8,1))
+    x1=(1/x)-1
+    g=1/sqrt(2*pi)*exp(-((x1-value)^2)/2)
+    a1=mean(g)*0.2
+    t4=c(t4,a1)
+  }
+  out=rbind(mean(t4),var(t4))
+  rownames(out)=c('estimate','variance')
+  out
+}
+stram=cbind(stram.f(1000,-6),stram.f(1000,-5),stram.f(1000,-4),stram.f(1000,-3.5),stram.f(1000,-3),stram.f(1000,-2.5),stram.f(1000,-2))
+
+```
+
+#### comparison
+
+```{r}
+all=rbind(stand,mc[1,],imposam[1,],anti[1,],stram[1,],mc[2,],imposam[2,],anti[2,],stram[2,])
+colnames(all)=c('x=-6','x=-5','x=-4','x=-3.5','x=-3','x=-2.5','x=-2')
+rownames(all)=c('stand value','mc.value','imposam.value','anti.value','stram.value','mc.var','imposam.var','anti.var','stram.var')
+all
+```
+
+-----------------
+
+<br/>
+
+
+## 第三題
+
+Let $X_i, i=1,2,...,5$ be independent exponential random variables each with mean 1, and consider the quantity $\theta$ defined by $\theta=P\{\sum_{i=1}^{5}iX_i \geq 21.6\}$ Propose at least three simulation methods to estimate  and compare their variances.
+
+- Monte Carlo 方法，在不做任何轉換下，依據題目意思產生五個服從 exp(1) 的變數，計算一千次中 $\sum_{i=1}^{5}iX_i \geq 21.6$ 發生的次數，機率值極為$\theta$ 的估計值，以這樣的方式模擬一千次後得到 1000 個$\theta$的估計值，計算得估計值的平均數與變異數。
+
+- Antithetic 方法是產生一組新的變數跟原來的變數具有相同分配，但兩組變數間具有負的相關性，在估計參數時用兩組變數估計出的估計值平均，以同樣的方式模擬一千次，得到 1000 個$\theta$的估計值，計算得估計值的平均數與變異數。
+
+```{r}
+#Monte Carlo SRS vs. Antithetic
+result <- matrix(ncol = 1000, nrow = 2)
+for (i in 1:1000){
+  t=matrix(ncol = 1000, nrow = 2)
+  for (j in 1:1000){
+    u=runif(5)
+    x=-log(u)
+    a=sum(c(1:5)*x)
+    y=-log(1-u)
+    b=sum(c(1:5)*y)
+    t[,j]=c(a,b)}
+  e=apply(t,1,function(x) sum(x>=21.6)/1000)
+  result[1,i]=e[1]
+  result[2,i]=(e[1]+e[2])/2}
+```
+
+```{r echo=FALSE}
+A <- matrix(ncol = 2,nrow = 2)
+A[1,] <- apply(result,1,mean)
+A[2,] <-apply(result,1,var)
+colnames(A) <- c("Monte Carlo","Antithetic")
+rownames(A) <- c("mean", "var")
+A
+```
+
+- Control Variance : runs = 10000 才會比較準確
+
+```{r}
+t=vector(length=10000)
+for (i in 1:10000){
+  e=vector(length=10)
+  for (j in 1:10){
+    u=runif(5)
+    x=-log(u)
+    e[j]=sum(c(1:5)*x)}
+  t[i]=sum(e >= 21.6)/10}
+u2=runif(10000)
+th=c((u2<=t)*1)
+mean(th)
+var(th)/10000
+
+```
+
+-----------------
+
+<br/>
+
+## 第四題
+
+Evaluate the following quantity by both numerical and Monte Carlo integration, and compare their errors with respect to the numbers of observations used. Also, propose at least two simulation methods to reduce the variance of Monte Carlo integration and compare their variances.$$\theta=\int_0^1 e^{x^2} dx$$
+
+- 目標：
+    1. 利用 2 種方法計算目標函數 f 在 [0,1] 的積分，方法分別是黎曼法與蒙地卡羅方法
+    
+    2. 利用 2 種方法縮減蒙地卡羅方法下的變異數，并進行比較，方法分別是 antithetic variate、stratified sampling
+
+- 做法：
+    1. 黎曼法：將 (0,1) 切分成 $10^7$ 等分，計算每個區間對應的 f 值，并計算平均數
+    
+    2. 蒙地卡羅：從 uniform 分佈中抽取不同數量的觀測值，代入 f 中計算平均數，同時比較不同數量的觀測值對結果的影響程度
+    
+    3. 變異數縮減方法採用antithetic variate、stratified sampling，具體做法類似第一題
+       
+- 結論：
+    1. 計算積分結果：數值法與蒙地卡羅方法在小數點后 4 位相同，蒙地卡羅時抽取的樣本數從 1000 按 10 倍數遞增但結果並沒有看出有顯著的區別
+    
+    2. 縮減變異數： 2 種方法各嘗試 1000 次后，平均數的差異同樣沒有差別很大，但 stratified sampling 結果的變異數較小
+
+
+#### numerical
+
+```{r}
+x=c(1:10^7)/10^7  #0-1  切成很多個
+y=exp(x^2)
+nu=cbind(mean(y),0) 
+nu
+```
+
+
+#### monte carlo
+
+```{r}
+mc= matrix(ncol = 2, nrow = 10)
+t5=vector(length = 1000)
+for(k in 1:10){
+  for(i in 1:1000){
+    x=runif(1000*k)
+    f=exp(x^2)
+    t5[i]=mean(f)
+  }
+  mc[k,]=cbind(mean(t5),var(t5))
+}
+```
+
+
+#### 差異
+
+```{r echo=FALSE}
+mean(y)-mc[,1]
+```
+
+
+#### antithetic variate
+
+```{r}
+t6=NULL
+for(i in 1:1000){
+  x1=runif(10000)
+  x2=1-x1
+  f=function(x){exp(x^2)}
+  a=(f(x1)+f(x2))/2
+  t6=c(a,t6)    
+}
+an=cbind(mean(t6),var(t6))
+
+```
+
+
+#### stratified sampling
+
+```{r}
+t7=NULL
+for(i in 1:1000){
+  x=c(runif(2000,0,0.2),runif(2000,0.2,0.4),runif(2000,0.4,0.6),runif(2000,0.6,0.8),runif(2000,0.8,1))
+  f=exp(x^2)
+  a1=mean(f)
+  t7=c(a1,t7)
+}
+ss=cbind(mean(t7),var(t7))
+```
+
+
+#### comparison
+
+```{r echo=FALSE}
+all=rbind(nu,mc,an,ss)
+colnames(all)=c('value','variance')
+rownames(all)=c('numerical',rep('mc',10),'anti','strat')
+all
+```
+
+-----------------
+
+<br/>
+
+## 第五題
+
+First, simulate 100 observations from a mixed distribution of N(2,1) and N(2,1), each with probability 0.5. Then, use at least 3 density estimating methods to smooth the observations. You need to specify the parameters in the smoothing methods, and compare the results.
+
+- 依據題目指定方式建立 data，使用三種密度估計方法
+    - histogram density estimator：參照課本，給訂寬度h，將資料依據 h 分為 m 等份  
+    i.e. 最大值=a、最小值=b，h = (a-b)/m，then the density estimate of $x \in [a,b]$ is $$\hat{f}(x) = \frac{1}{n}\sum_{j=1}^{m}\frac{n_j}{h}*I{x \in [a_{j-1},a_j]}$$ 
+    
+    - naive density estimator：參照課本，Instead of rectangle, allow the weight is centered on x : $$\hat{f}(x) = \frac{1}{n}\sum_{i=1}^{n}\frac{1}{h} w(\frac{x-x_i}{h}), where w(x) = 1/2 ,if |x| < 1$$
+    
+    - kernel density estimator：kernel 方法有很多種類，在此使用 Guassian kernal：$$\hat{f}(x) = \frac{1}{n}\sum_{i=1}^{n}\frac{1}{h} w(\frac{x-(x_i)}{h}),where \int_{-\infty}^{\infty}K(t)dt = 1$$
+
+```{r}
+# data
+x0=runif(100)
+x1=rnorm(100,-2,1)
+x2=rnorm(100,2,1)
+x=(x0<0.5)*x1+(x0>0.5)*x2
+# histogram density estimator
+histest=function(x,h){
+  w=function(x,a,b){
+    if (x<=b & x>=a) {return(1)}
+    else {return(0)}}
+  n=length(x)
+  sx=seq(min(x),max(x),by=h)
+  a=sx[-length(sx)]
+  b=sx[-1]
+  ni=vector(length = length(a))
+  for (j in 1:length(a)){
+    ni[j]=sum(x<=b[j] & x>=a[j])}
+  y=vector(length = n)
+  for (i in 1:n){
+    d <- sort(x)[i]
+    t0=vector(length = length(a))
+    for (j in 1:length(a)){
+      t0[j]=w(d,a[j],b[j])}
+    y[i]=1/n*sum(ni/h*t0)}
+  return(y)}
+# naive density estimator
+naiveest=function(x,h){
+  w=function(y){
+    if (abs(y)<1) {return(1/2)}
+    else {return(0)}}
+  n=length(x)
+  sx=seq(min(x),max(x),length=500)
+  y <- vector(length = 500)
+  for (i in 1:500){
+    d1 <- sx[i]
+    t0 <- vector(length = n)
+    for (j in 1:n){
+      d2 <- x[j]
+      t0[j]=w((d1-d2)/h)}
+    y[i]=1/n*sum(1/h*t0)}
+  return(y)}
+# kernel density estimator 
+kernelest=function(x,h){
+  w=function(y){ dnorm(y) }
+  n=length(x)
+  sx=seq(min(x),max(x),length=500)
+  y <- vector(length = 500)
+  for (i in 1:500){
+    d1 <- sx[i]
+    t0 <- vector(length = n)
+    for (j in 1:n){
+      d2 <- x[j]
+      t0[j]=w((d1-d2)/h)}
+    y[i]=1/n*sum(1/h*t0)}
+  return(y)}
+
+```
+
+#### 比較 histogram density estimator 在不同 h 下的樣子 
+
+```{r echo=FALSE}
+h1=histest(x,0.5)   
+h2=histest(x,0.9)
+plot(density(x),xlab="x",ylab="f(x)",xlim=c(-5,5), ylim=c(0,0.3), 
+     lty = 2, main = "Histgram Estimate(n=100)")
+lines(sort(x),h1,col=2)
+lines(sort(x),h2,col=4, lty=3,lwd=1.5)
+legend(0,0.3,c("True","h=0.5","h=0.8")
+       ,col=c(1,2,4),lty=c(2,1,3),cex=0.8)
+
+```
+
+#### 比較三種方法 h=0.5 下的樣子
+- 由圖可以看出 histogram 的估計方法震盪最大， naïve 則可看出資料的局部特性，而 normal kernel 的曲線最為平滑。
+
+```{r echo=FALSE}
+xa=seq(min(x),max(x),length=500)
+y2=naiveest(x,0.5) 
+y3=kernelest(x,0.5)        
+plot(density(x),xlab="x",ylab="f(x)",xlim=c(-5,5), ylim=c(0,0.3), 
+     lwd = 1.5, main = "Histgram Estimate(n=100)",lty=2)
+lines(sort(x),h1, col="#66c2a5",lwd = 1.5)
+matplot(cbind(xa,xa),cbind(y2,y3),typ=c("l","l"),
+        lwd = 1.5,col=c(2,4),lty=c(3:4),main=" Three Density Estimates ",add=TRUE)
+legend(-1.5,0.3,c("True","histogram(h=0.5)","naive(h=0.5)","kernel(h=0.5)")
+       ,col=c(1,"#66c2a5",2,4),lty=c(2,1,3,4),cex=0.8)
+
+
+```
+
+
+-----------------
+
+<br/>
+
+## 第六題
+
+Visit the webpage of Department of Statistics, Ministry of Interior of the Taiwan Government (www.moi.gov.tw/stat) and download the age-specific death records of year 2015.  Use the smoothing techniques introduced in class to revise the age-specific mortality rates and compare with the values from 2015 Taiwan abridged life table. You only need to consider the case of the male or female.
+
+- 採用的資料是 2015 年男性國民簡易生命表，取 0~84 歲的生存數與死亡數，由於 84 歲之後是 85 歲以上的加總，會產生估計之後偏差的情形，因此只取 0~84 歲的國民簡易生命表來做使用。
+
+- Smoothing Spline ANOVA Models: 利用 gss 套件裡的 gssanova 函式，此為講義中即有的程式碼資源，使用 family = Poisson（有產生 warning message），對實際觀測死亡數除生存數值取 log 後的曲線作圖，下圖為真實曲線與估計曲線，包含 95% 上下限，在轉折的地方估計得較沒有那麼準確
+
+- 第一張圖比較團寬在 h=0.5 及 h=0.8 下的情形，0.5 將資料組距切割得較細，在 x 較大的區域估計得不算太好
+
+- lowess 平滑方法：第二張圖比較參數 f=0.1 與 f=0.05 的情形，發現 f 越小與原觀察值越貼近，
+
+- 第三圖綜合 Spline 與 lowess 兩種方法做比較，可以看出在轉折處 lowess 的估計較準確
+```{r}
+data=read.csv("/Users/apple/nicole/R code/classR/hw5_death.csv", fileEncoding = "big5")
+d=data$d[1:85]
+e=data$e[1:85]
+t=sqrt(0:84)
+pois.fit=gssanova((d/e)~t,family="poisson",weights=e)
+est1=predict(pois.fit,data.frame(t=t),se=TRUE)
+poi.lowess=lowess(log(d/e),f=0.05)
+```
+
+```{r echo=FALSE}
+plot((0:84),log(d/e),typ="l",xlab="age",ylab="log mortality")
+lines((0:84),est1$fit,col=2,lty=2)
+lines((0:84),est1$fit+1.96*est1$se.fit,col=3)
+lines((0:84),est1$fit-1.96*est1$se.fit,col=4)
+legend(0,-2,c("observations","gss(Possion)","up95%","low95%")
+       ,col=c(1:4),lty=c(1,2,1,1),cex=1)
+
+poi.lowess2=lowess(log(d/e),f=0.1)
+plot((0:84),log(d/e),typ="l",xlab="age",ylab="log mortality")
+lines((0:84),poi.lowess2$y,col=2,lty=2,lwd=1.5)
+lines((0:84),poi.lowess$y,col=4,lty=3,lwd=1.5)
+legend(0,-2,c("observations","lowess(f=0.1)","lowess(f=0.05)")
+       ,col=c(1,2,4),lty=c(1:3),cex=1)
+
+plot((0:84),log(d/e),typ="l",xlab="age",ylab="log mortality")
+lines((0:84),(est1$fit),col=2,lty=2,lwd=1.5)
+lines((0:84),poi.lowess$y,col=4,lty=3,lwd=1.5)
+legend(0,-2,c("observations","gss(Possion)","lowess(f=0.05)")
+       ,col=c(1,2,4),lty=c(1:3),cex=1)
+
+```
+
+<br/>
+
+-----------------
+
+
