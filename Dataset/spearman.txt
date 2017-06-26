@@ -1,0 +1,7 @@
+               Classics French English Mathematics Discrimination Music
+Classics           1.00   0.83    0.78        0.70           0.66  0.63
+French             0.83   1.00    0.67        0.67           0.65  0.57
+English            0.78   0.67    1.00        0.64           0.54  0.51
+Mathematics        0.70   0.67    0.64        1.00           0.45  0.51
+Discrimination     0.66   0.65    0.54        0.45           1.00  0.40
+Music              0.63   0.58    0.51        0.51           0.40  1.00
