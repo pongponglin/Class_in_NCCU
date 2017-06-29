@@ -21,4 +21,4 @@
 * highcharter
 #### Other
 * cov_matrix_test : 檢定共變異矩陣相等
-* share520 : 2017.5.20業師分享Demo
+
