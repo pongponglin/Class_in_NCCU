@@ -26,3 +26,6 @@
 * rvest
 * lattice
 * highcharter
+#### Other
+* cov_matrix_test : 檢定共變異矩陣相等
+
