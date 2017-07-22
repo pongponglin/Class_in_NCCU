@@ -11,14 +11,18 @@
 * HW02
 * HW03
 * HW04
+* HW05
 #### NCCU class : Multivariate statist Analysis	
 * PCA : Principal Component Analysis
 * CCA : Canonical Correlation Analysis
 * classification : classification tree LDA QDA Logistic NN
+* Bagging-and-boosting
+* SVM : Support Vector Machine
+* cluster
+* ICA
+* MDS
+* FA : Factor Analysis
 #### Packages
 * rvest
 * lattice
 * highcharter
-#### Other
-* cov_matrix_test : 檢定共變異矩陣相等
-
