@@ -25,7 +25,7 @@ text(variable.scal$point,row.names(cor(iris[,-5])),cex=.8)
 iris.iso <- isoMDS(dist(iris.adjusted[-102,]))# 預設為二維度
 
 eqscplot(iris.iso$points,type="n")
-text(iris.iso$points,label=row.names(iris[-102,]),cex=.8)
+text(iris.iso$points,label=row.names(iris[-102,]),col = as.numeric(iris$Species),cex=.8)
 
 iris.iso$stress
 # [1] 4.182693  (in percent)

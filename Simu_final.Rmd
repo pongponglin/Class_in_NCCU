@@ -1,0 +1,296 @@
+---
+title: "統計計算與模擬期末報告"
+author: "105354003林芃彣"
+date: "June, 22, 2017"
+output: 
+  html_document: 
+    highlight: haddock
+    theme: spacelab
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+	warning = FALSE
+  )
+library(dplyr)
+
+```
+
+
+<br/>
+<br/>
+
+
+## 主題：賭場遊戲
+
+---------------
+
+- 玩法簡單且直觀，是最適合新手的遊戲之一
+
+- **玩法**：這是一種相對簡單的撲克牌遊戲，玩家下注，玩家獲發一張牌後，莊家為自己發一張牌，作比較點數，點數大的為勝方，撲克牌的花色與牌的大小無關，這個遊戲通常會使用六副撲克牌，牌的大小次序依次為A、K、Q、J、10、9、8、7、6、5、4、3、2，由於牌的花色於此遊戲中無效，故當莊家和玩家的點數相同時，玩家可作以下兩個選擇：
+
+    - 投降 (Surrender) ：玩家可取回下注金額的一半，也就是輸掉一半的賭注
+    
+    - 進入賭場戰爭 (Going to War) ：玩家需額外再加上相等於原注的金額進入賭場戰爭，然後莊荷會消去三張牌，再發牌給玩家，及後再消去三張牌，發牌給自己，如果莊家點數較大，玩家會輸掉原注和額外加注。如玩家點數較大，則贏取與額外加注相等的金額。如兩者點數再次相同，玩家則可贏取原注與額外加注的兩份賠彩。
+
+- 由以上規則可以看出，這是賭場優勢非常大的一種賭博遊戲，道理很簡單，牌相同時，賭客選擇投降，自動輸掉一半賭注，選擇進入賭場戰爭，贏的時候只贏一倍，輸的時候則輸兩倍，雖說牌再次相同時贏兩倍的原始賭注，但賭客與發牌員兩張牌都相同的機率遠小於1%，所以這個遊戲的賭場優勢 (House Advantage) 是頗高的，一般都超過2%。
+
+- 但作為一種娛樂遊戲，賭場戰爭是有其吸引人的地方，特別對於初進賭場的年輕人，想拿十幾塊錢碰碰運氣，不妨玩一下這個遊戲，但時間不可太久，玩上幾手，輸贏都走，很可能贏錢。
+
+<br/>
+
+## 動機與目的
+
+---------------
+
+- **動機**：想做跟賭場遊戲有關的模擬，像是21點是賭場裡最常見也算有名的遊戲，但應該有其他同學做這個題目，而且也相當多人有做過類似的模擬，於是去找尋其他的遊戲，後來發現了這個賭場遊戲，是之前沒有聽過賭場裡會有的遊戲，而且概念相當簡單，因次想以此當作主題。
+
+- **目的**：這是一個在賭場裡很適合新手的遊戲，而我也從來沒去進到賭場下注過，所以假想初入賭場的我想找到可以在這個遊戲運行的一套規則，而賭場遊戲基本上都是有具有賭場優勢的，雖然這個遊戲看起來就是運氣問題，但能不能找到一個停損點，或是贏到多少錢的時候就收手。
+
+<br/>
+
+## 研究方法
+
+---------------
+
+- 設計一套自己喜歡的下注方式，具有規則也方便模擬，真正在賭場下注時也適合有一套規律的運作，
+
+- 找到一個停損點，在現實賭場時，當運氣不好確實有可能一直輸錢，那要在什麼時候收手讓自己冷靜一下
+
+#### 前提 
+
+- 六副撲克牌，共 312 張牌，玩一場牌
+- 起始賭金: 1000 元
+- 賭注：每注 10 元，進入賭場遊戲：10 元
+- 玩家：莊家一人，玩家一人，共兩人
+
+#### 1.模擬只比大或小的情況
+
+- 六副撲克牌，一人一張比大小的情況，兩人最多可以玩 156 次，定一場牌玩 150 次，純粹比大或小，記錄每個 150 次大與小的機率，模擬 1000 次，另外可以看平手的機率 1000 的平均為多少
+
+
+```{r}
+
+draw <- function(x){
+  x <- sample(x, length(x))
+  a <- sample(x, 1)
+  s <- sum(x==a)-1
+  x <- c(x[x!=a], rep(a,s))
+  return(x)
+}
+
+# 1.
+n <- 150
+A <- matrix(ncol = 3, nrow = 10000)
+for (i in 1:10000) {
+x <- rep(c(2:14),6*4)
+k <- vector(length = n)
+  for (j in 1:n) {
+    # player
+    x <- sample(x, length(x))
+    a <- sample(x, 1)
+    s <- sum(x==a)-1
+    x <- c(x[x!=a], rep(a,s))
+    # 莊
+    x <- sample(x, length(x))
+    b <- sample(x, 1)
+    s <- sum(x==a)-1
+    x <- c(x[x!=a], rep(a,s))
+    
+    if (a>b){ k[j]=1 } else if (a==b) {k[j]=0} else  k[j]=-1
+  }
+  A[i,1] <- sum(k==1)/150
+  A[i,2] <- sum(k==-1)/150
+  A[i,3] <- sum(k==0)/150
+}
+tmp <- apply(A, 2, mean)
+apply(A, 2,sd)
+
+312/(2*(tmp[1]+tmp[2])+10*tmp[3])
+
+```
+
+#### 2. 
+
+- 正式的遊戲，由於進入堵腸遊戲之後，分別在發給莊家與玩家前都需要抽掉三張牌再發牌，因此牌的耗損會比較快，因此定每場牌可以玩 50 局，
+
+- 可以玩到 100 局
+
+- 模擬玩 50 局 1000 次，記錄每次剩下的錢為多少，
+
+- 當模擬的次數越多
+
+```{r}
+
+# 2.
+x <- rep(c(2:14),6*4)
+money = 1000
+n <- 100
+k <- vector(length = n)
+money_n <- vector(length = n)
+simu_money <- vector(length = 1000)
+e = NULL
+  
+for (j in 1:n) {
+  # player
+  x <- sample(x, length(x))
+  a <- sample(x, 1)
+  s <- sum(x==a)-1
+  x <- c(x[x!=a], rep(a,s))
+  # 莊
+  x <- sample(x, length(x))
+  b <- sample(x, 1)
+  s <- sum(x==a)-1
+  x <- c(x[x!=a], rep(a,s))
+  
+  if (a>b){ k[j]=1 } else if (a==b) {k[j]=0} else  k[j]=-1
+  if (k[j] != 0 ) { money <- money+k[j]*10 }
+else  {
+  for (i in 1:3) {
+    x<- draw(x)
+  }
+  # player
+  x <- sample(x, length(x))
+  a <- sample(x, 1)
+  s <- sum(x==a)-1
+  x <- c(x[x!=a], rep(a,s))
+  for (i in 1:3) {
+    x<- draw(x)
+  }
+  # 莊
+  x <- sample(x, length(x))
+  b <- sample(x, 1)
+  s <- sum(x==a)-1
+  x <- c(x[x!=a], rep(a,s))
+ if (a>b){ g=1 } else if (a==b) {g=4} else  g=-2
+  money <- money+g*10
+  e  <- c(e,g)
+  }
+  money_n[j] <- money
+  left <- length(x)
+}
+
+k
+table(k)
+e
+money
+money_n
+plot(money_n, type = "l")
+
+
+par(mfrow=c(3,3), mar=c(2,2,2,2))
+for (i in 1:3) {
+  x <- rep(c(2:14),6*4)
+  money = 1000
+  n_50 <- game(x,50,money)
+  plot(n_50, type = "l", main = "n=50")
+}
+for (i in 1:3) {
+  x <- rep(c(2:14),6*4)
+  money = 1000
+  n_70 <- game(x,70,money)
+  plot(n_70, type = "l", main = "n=70")
+}
+for (i in 1:3) {
+  x <- rep(c(2:14),6*4)
+  money = 1000
+  n_100 <- game(x,100,money)
+  plot(n_100, type = "l", main = "n=100")
+}
+
+# 3.
+
+game <- function(x,n,money){
+  money_n <- vector(length = n)
+  for (j in 1:n) {
+    # player
+    x <- sample(x, length(x))
+    a <- sample(x, 1)
+    s <- sum(x==a)-1
+    x <- c(x[x!=a], rep(a,s))
+    # 莊
+    x <- sample(x, length(x))
+    b <- sample(x, 1)
+    s <- sum(x==a)-1
+    x <- c(x[x!=a], rep(a,s))
+    
+    if (a > b){ k=1 } else if (a==b) {k=0} else  k=-1
+     if (k != 0 ) { money <- money + k*10 }
+    else  {
+      for (i in 1:3) {
+        x<- draw(x)
+      }
+      # player
+      x <- sample(x, length(x))
+      a <- sample(x, 1)
+      s <- sum(x==a)-1
+      x <- c(x[x!=a], rep(a,s))
+      for (i in 1:3) {
+        x<- draw(x)
+      }
+      # 莊
+      x <- sample(x, length(x))
+      b <- sample(x, 1)
+      s <- sum(x==a)-1
+      x <- c(x[x!=a], rep(a,s))
+     if (a > b){ g=1 } else if (a == b) {g = 4} else  g = -2
+      money <- money + g*10
+    }
+  money_n[j] <- money
+  }
+  return(money = money_n)
+}
+
+
+n <- 50
+simu_money <- matrix(ncol = n, nrow = 10000)
+for (i in 1:10000) {
+  x <- rep(c(2:14),7*4)
+  money = 1000
+  simu_money[i,] <- game(x,n,money) 
+}
+
+least <- simu_money[,n]
+plot(density(least))
+hist(least)
+mean(least)
+sd(least)
+min(least)
+max(least)
+sum(least > 1000)
+
+sum(apply(simu_money, 1, max) >= 1000)
+max_place <- apply(simu_money, 1, which.max)
+table(max_place)
+apply(simu_money, 1, min)
+
+m <- apply(simu_money, 1, max_t)
+table(m)
+
+
+
+x <- simu_money[1,]
+plot(x, type = "l")
+
+max_t <- function(x){
+a <-(x[-1] - x[-length(x)] > 0)*1 #後面的數字大於前面的數字設為1
+b <- which(a[-1] != a[-length(a)])+1 #找到0 1變號的位置
+b <- c(1,b,length(x))
+c <- b[-1] - b[-length(b)] #利用變號的位置相減 可以找到0或1重複的次數
+return(max(c))
+}
+table(c)
+max(c) #0 1 重複的次數
+
+max_t(x)
+
+```
+
+
+
+
+<br/>
+<br/>
+
+-----------

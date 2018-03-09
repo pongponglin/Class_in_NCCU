@@ -80,7 +80,7 @@ text(pcs.newolive,as.character(km$cluster),col=km$cluster,cex=0.6)
 plot(pcs.newolive[,1:2],type="n",xlab='1st PC',ylab='2nd PC')
 text(pcs.newolive[,1:2],as.character(olive$Region),col=olive$Region,cex=0.6)
 
-#### pam ################################################
+#### k-medios (pam) ########################################
 
 pa<-pam(daisy(newolive,stand=T),3,diss=T) 
 plot(pa,ask=T)

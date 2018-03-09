@@ -298,6 +298,3 @@ BoxMTest(d3[,-4], d3$y)
 BoxMTest(seed[,c(3,6)], seed$Y)
 
 
-
-
-
