@@ -6,12 +6,14 @@
 * rmarkdown introduction : form 于閔
 * prime : 會告訴你誰是質數的迴圈
 * share520 : 2017/5/20 業師分享
+
 #### NCCU class : Statistical Computing And Simulation
-* HW01
-* HW02
-* HW03
-* HW04
-* HW05
+* [HW01.html](https://pongponglin.github.io/Class_in_NCCU/HW01.html)
+* [HW02.html](https://pongponglin.github.io/Class_in_NCCU/HW02.html)
+* [HW03.html](https://pongponglin.github.io/Class_in_NCCU/HW03.html)
+* [HW04.html](https://pongponglin.github.io/Class_in_NCCU/HW04.html)
+* [HW05.html](https://pongponglin.github.io/Class_in_NCCU/HW05.html)
+
 #### NCCU class : Multivariate statist Analysis	
 * PCA : Principal Component Analysis
 * CCA : Canonical Correlation Analysis
@@ -22,10 +24,12 @@
 * ICA
 * MDS
 * FA : Factor Analysis
+
 #### Packages
 * rvest
 * lattice
 * highcharter
+
 #### Other
 * cov_matrix_test : 檢定共變異矩陣相等
 
