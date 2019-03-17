@@ -18,11 +18,6 @@
 * MDS
 * FA : Factor Analysis
 
-#### Packages
-* rvest
-* lattice
-* highcharter
-
 #### Other
-* cov_matrix_test : 檢定共變異矩陣相等
+* [cov_matrix_test](https://pongponglin.github.io/Class_in_NCCU/cov_matrix_test.html) : 檢定共變異矩陣相等
 
