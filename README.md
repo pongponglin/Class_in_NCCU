@@ -1,11 +1,4 @@
-# R_nccu
-
-#### documents
-* highcharter
-* packagesintroduction :rvest.R, lattice.R , rvest_lattice.Rmd
-* rmarkdown introduction : form 于閔
-* prime : 會告訴你誰是質數的迴圈
-* share520 : 2017/5/20 業師分享
+# Class_in_NCCU
 
 #### NCCU class : Statistical Computing And Simulation
 * [HW01.html](https://pongponglin.github.io/Class_in_NCCU/HW01.html)
